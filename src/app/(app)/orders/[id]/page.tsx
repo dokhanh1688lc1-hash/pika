@@ -1,13 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AutoPrint } from "@/components/AutoPrint";
 import { PrintButton } from "@/components/PrintButton";
 import { Badge, Field, Notice, SubmitButton, inputClass } from "@/components/ui";
 import { getMembership } from "@/lib/auth";
-import { getOrder } from "@/lib/data/repo";
+import { getOrder, getStoreInfo } from "@/lib/data/repo";
 import { isSupabaseConfigured } from "@/lib/env";
 import { vnd } from "@/lib/format";
 import { ORDER_STATUS, PAY_METHOD } from "@/lib/order-status";
 import { can } from "@/lib/rbac";
+import { vietQrUrl } from "@/lib/vietqr";
 import { collectDebt, voidOrder } from "../actions";
 
 export default async function OrderDetailPage({
@@ -15,12 +17,13 @@ export default async function OrderDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; ok?: string }>;
+  searchParams: Promise<{ error?: string; ok?: string; print?: string }>;
 }) {
-  const [{ id }, { error, ok }] = await Promise.all([params, searchParams]);
-  const [order, member] = await Promise.all([
+  const [{ id }, { error, ok, print }] = await Promise.all([params, searchParams]);
+  const [order, member, store] = await Promise.all([
     getOrder(id),
     isSupabaseConfigured() ? getMembership() : Promise.resolve(null),
+    getStoreInfo(),
   ]);
   if (!order) notFound();
   const canCollect = !!member && can(member.role, "pos.sell") && order.status === "partial";
@@ -31,6 +34,7 @@ export default async function OrderDetailPage({
 
   return (
     <>
+      {print === "1" && <AutoPrint />}
       <div className="mb-6 flex items-center justify-between gap-4 print:hidden">
         <div>
           <Link href="/orders" className="text-sm text-slate-500 hover:underline">← Đơn hàng</Link>
@@ -92,6 +96,14 @@ export default async function OrderDetailPage({
             ))}
             {order.due > 0 && <Row k="CÒN NỢ" v={vnd(order.due)} bold />}
           </div>
+          {store.bank && order.due > 0 && (
+            <div className="mt-3 border-t border-dashed border-slate-400 pt-3 text-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={vietQrUrl(store.bank, order.due, order.code)} alt="Mã QR thanh toán" className="mx-auto w-40" />
+              <p className="mt-1">Quét mã để thanh toán {vnd(order.due)}</p>
+              <p className="text-slate-500">{store.bank.holder} · {store.bank.account}</p>
+            </div>
+          )}
           {order.note && <p className="mt-2">Ghi chú: {order.note}</p>}
           {order.closeNote && <p className="mt-1">Lý do hoàn/huỷ: {order.closeNote}</p>}
           <p className="mt-4 text-center">Cảm ơn quý khách!</p>

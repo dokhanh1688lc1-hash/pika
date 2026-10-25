@@ -126,3 +126,23 @@ export interface ProductDetail extends Product {
   active: boolean;
   sessions: number | null;
 }
+
+export interface StoreInfo {
+  name: string;
+  phone: string;
+  address: string;
+  bank: { code: string; account: string; holder: string } | null;
+}
+
+export interface CustomerDetail {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  birthday: string;
+  note: string;
+  tier: string;
+  points: number;
+  totalSpent: number;
+  orders: { id: string; code: string; total: number; status: OrderStatus; createdAt: string }[];
+}

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Badge, Field, Notice, PageHeader, SubmitButton, Table, inputClass } from "@/components/ui";
 import { getMembership } from "@/lib/auth";
 import { listCustomers } from "@/lib/data/repo";
@@ -20,7 +21,7 @@ export default async function CustomersPage({
 
   return (
     <>
-      <PageHeader title="Khách hàng" subtitle="Hồ sơ khách hàng và chương trình tích điểm (1 điểm / 10.000đ)" />
+      <PageHeader title="Khách hàng" subtitle="Hồ sơ khách hàng và tích điểm (1 điểm / 10.000đ). Bấm tên khách để xem lịch sử, sửa hoặc xoá." />
       <Notice error={error} ok={ok} />
 
       {canEdit && (
@@ -40,7 +41,9 @@ export default async function CustomersPage({
       <Table head={["Khách hàng", "Điện thoại", "Hạng", "Điểm", "Tổng chi tiêu", "Lần cuối"]}>
         {customers.map((c) => (
           <tr key={c.id}>
-            <td className="td font-medium">{c.name}</td>
+            <td className="td font-medium">
+              <Link href={`/customers/${c.id}`} className="text-brand-700 hover:underline">{c.name}</Link>
+            </td>
             <td className="td">{c.phone}</td>
             <td className="td"><Badge tone="violet">{c.tier}</Badge></td>
             <td className="td">{num(c.points)}</td>

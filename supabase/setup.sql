@@ -957,3 +957,8 @@ do $$ begin
   grant execute on function create_purchase(uuid, uuid, uuid, jsonb, numeric, uuid, text) to service_role;
   grant execute on function pay_supplier(uuid, uuid, numeric, uuid) to service_role;
 exception when undefined_object then null; end $$;
+
+-- Thông tin ngân hàng để hiện mã QR thanh toán (VietQR) khi bán hàng / in hoá đơn
+alter table stores add column if not exists bank_code text;
+alter table stores add column if not exists bank_account text;
+alter table stores add column if not exists bank_holder text;

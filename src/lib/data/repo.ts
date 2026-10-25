@@ -5,8 +5,8 @@ import {
   demoAppointments, demoBatches, demoCustomers, demoProducts, demoStaff, demoStats,
 } from "./demo";
 import type {
-  Appointment, BatchRow, Branch, Customer, DashboardStats, OrderDetail, OrderRow, Product, ProductDetail,
-  PurchaseRow, StaffMember, Supplier, TransferRow,
+  Appointment, BatchRow, Branch, Customer, CustomerDetail, DashboardStats, OrderDetail, OrderRow, Product, ProductDetail,
+  PurchaseRow, StaffMember, StoreInfo, Supplier, TransferRow,
 } from "./types";
 
 /**
@@ -363,4 +363,59 @@ export async function listInactiveProducts(storeId?: string): Promise<ProductDet
     .from("products").select(DETAIL_COLUMNS).eq("store_id", sid).eq("active", false).order("name");
   if (error) throw error;
   return (data ?? []).map((r) => toDetail(r as unknown as ProductRow));
+}
+
+export async function getStoreInfo(storeId?: string): Promise<StoreInfo> {
+  const empty: StoreInfo = { name: "", phone: "", address: "", bank: null };
+  if (!isSupabaseConfigured()) return empty;
+  const sid = await resolveStore(storeId);
+  if (!sid) return empty;
+  const { data } = await getAdminClient()
+    .from("stores").select("name, phone, address, bank_code, bank_account, bank_holder").eq("id", sid).maybeSingle();
+  if (!data) return empty;
+  return {
+    name: data.name ?? "", phone: data.phone ?? "", address: data.address ?? "",
+    bank: data.bank_code && data.bank_account
+      ? { code: data.bank_code, account: data.bank_account, holder: data.bank_holder ?? "" }
+      : null,
+  };
+}
+
+export async function getCustomer(id: string, storeId?: string): Promise<CustomerDetail | null> {
+  if (!isSupabaseConfigured() || !UUID_RE.test(id)) return null;
+  const sid = await resolveStore(storeId);
+  if (!sid) return null;
+  const db = getAdminClient();
+  const { data: c, error } = await db
+    .from("customers").select("id, name, phone, email, birthday, note, tier, points, total_spent")
+    .eq("store_id", sid).eq("id", id).maybeSingle();
+  if (error) throw error;
+  if (!c) return null;
+  const { data: orders } = await db
+    .from("orders").select("id, code, total, status, created_at")
+    .eq("store_id", sid).eq("customer_id", id).order("created_at", { ascending: false }).limit(20);
+  return {
+    id: c.id, name: c.name, phone: c.phone ?? "", email: c.email ?? "", birthday: c.birthday ?? "",
+    note: c.note ?? "", tier: c.tier, points: c.points, totalSpent: Number(c.total_spent),
+    orders: (orders ?? []).map((o) => ({
+      id: o.id, code: o.code, total: Number(o.total), status: o.status, createdAt: o.created_at,
+    })),
+  };
+}
+
+/** Email đăng nhập của nhân viên đã được cấp tài khoản: { [staffId]: email }. */
+export async function listStaffAccounts(storeId?: string): Promise<Record<string, string>> {
+  if (!isSupabaseConfigured()) return {};
+  const sid = await resolveStore(storeId);
+  if (!sid) return {};
+  const db = getAdminClient();
+  const { data } = await db.from("staff").select("id, user_id").eq("store_id", sid).not("user_id", "is", null);
+  const out: Record<string, string> = {};
+  await Promise.all(
+    (data ?? []).map(async (r) => {
+      const { data: u } = await db.auth.admin.getUserById(r.user_id as string);
+      if (u?.user?.email) out[r.id as string] = u.user.email;
+    }),
+  );
+  return out;
 }

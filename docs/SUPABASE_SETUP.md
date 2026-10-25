@@ -67,6 +67,13 @@ Nhân viên khác: họ tạo tài khoản rồi bạn thêm họ vào cửa hà
 4. **Chuyển kho**: cần ít nhất 2 chi nhánh (chủ cửa hàng thêm ở trang Chuyển kho). Lô cận date chuyển trước và giữ nguyên hạn dùng.
 5. **Xoá nhân viên** (trang Nhân viên): nhân viên chưa có lịch sử thì xoá hẳn; đã có đơn / lịch hẹn thì chuyển sang "ngừng hoạt động" để giữ báo cáo cũ. Không xoá được chủ cửa hàng hoặc chính mình.
 
+## Mã QR, hạn lô, tài khoản nhân viên, sửa khách hàng
+1. **Chạy lại `supabase/setup.sql`** (thêm cột ngân hàng cho cửa hàng).
+2. **Mã QR thanh toán**: Cài đặt → "Cửa hàng & thanh toán QR" → chọn ngân hàng, nhập số tài khoản và tên chủ tài khoản. Sau khi bấm Thanh toán ở POS sẽ hiện hộp thoại có mã QR VietQR (đúng số tiền, nội dung là mã đơn) và nút **In hoá đơn**. Mã QR tải từ img.vietqr.io nên máy cần có internet.
+3. **Sửa lô**: mục Hạn sử dụng → bấm "Sửa" ở từng lô để đổi hạn dùng / số lô (nhập nhầm). Đổi số lượng dùng Kiểm kho.
+4. **Cấp tài khoản nhân viên**: trang Nhân viên → "Cấp tài khoản" → nhập email + mật khẩu (từ 8 ký tự), gửi cho nhân viên. Họ đăng nhập tại trang đăng nhập và chỉ có quyền theo vai trò. Có thể đổi mật khẩu hoặc thu hồi tài khoản. Xoá nhân viên sẽ xoá luôn tài khoản đăng nhập.
+5. **Khách hàng**: bấm tên khách để xem lịch sử mua, sửa thông tin hoặc xoá (chỉ xoá được khách chưa có đơn / lịch hẹn và không còn liệu trình dở).
+
 ## Cập nhật khi có phiên bản mới (quan trọng)
 Mỗi khi `supabase/setup.sql` thay đổi (ví dụ giai đoạn 2 thêm hàm bán hàng và nhập kho), hãy **dán lại toàn bộ file và Run** trong SQL Editor. File chạy lại an toàn, không xoá dữ liệu.
 Nếu bỏ qua bước này, POS và nhập kho sẽ báo lỗi kiểu `Could not find the function public.create_pos_order`.

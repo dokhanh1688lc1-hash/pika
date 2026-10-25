@@ -1,9 +1,10 @@
 "use client";
 
-import { Minus, Plus, Trash2 } from "lucide-react";
+import { Minus, Plus, Printer, Trash2, X } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 import { checkout, type CheckoutResult } from "@/app/(app)/pos/actions";
 import { vnd } from "@/lib/format";
+import { vietQrUrl, type BankInfo } from "@/lib/vietqr";
 
 export interface PosProduct {
   id: string;
@@ -35,12 +36,13 @@ const toNumber = (s: string) => {
 };
 
 export function PosTerminal({
-  products, customers, staff, demo,
+  products, customers, staff, demo, bank,
 }: {
   products: PosProduct[];
   customers: PosPerson[];
   staff: PosPerson[];
   demo: boolean;
+  bank: BankInfo | null;
 }) {
   const [query, setQuery] = useState("");
   const [cart, setCart] = useState<Record<string, number>>({});
@@ -51,6 +53,8 @@ export function PosTerminal({
   const [discountText, setDiscountText] = useState("");
   const [note, setNote] = useState("");
   const [result, setResult] = useState<CheckoutResult | null>(null);
+  const [paidWith, setPaidWith] = useState<string>("cash");
+  const [showDone, setShowDone] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const byId = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
@@ -109,6 +113,8 @@ export function PosTerminal({
       });
       setResult(res);
       if (res.ok) {
+        setPaidWith(method);
+        setShowDone(true);
         setCart({});
         setPaidText("");
         setDiscountText("");
@@ -236,6 +242,76 @@ export function PosTerminal({
         </button>
         {demo && <p className="text-xs text-slate-500">Chế độ demo: kết nối Supabase để tạo đơn thật.</p>}
       </aside>
+      {showDone && result?.ok && (
+        <DoneDialog result={result} method={paidWith} bank={bank} onClose={() => setShowDone(false)} />
+      )}
+    </div>
+  );
+}
+
+function DoneDialog({
+  result, method, bank, onClose,
+}: {
+  result: Extract<CheckoutResult, { ok: true }>;
+  method: string;
+  bank: BankInfo | null;
+  onClose: () => void;
+}) {
+  const due = Math.max(result.total - result.paid, 0);
+  // Chuyển khoản / ví: QR đúng số tiền đã thu. Các hình thức khác còn nợ: QR cho phần còn thiếu.
+  const qrAmount = method === "transfer" || method === "ewallet" ? result.paid : due;
+  const showQr = !!bank && qrAmount > 0;
+  const printUrl = `/orders/${result.orderId}?print=1`;
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/50 p-4" role="dialog" aria-modal="true">
+      <div className="card w-full max-w-sm space-y-4">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="font-semibold">Đã tạo đơn {result.code}</p>
+            <p className="text-sm text-slate-600">
+              Tổng {vnd(result.total)} · đã thu {vnd(result.paid)}
+              {due > 0 ? ` · còn nợ ${vnd(due)}` : ""}
+            </p>
+            {result.points > 0 && <p className="text-sm text-slate-500">Khách được cộng {result.points} điểm</p>}
+          </div>
+          <button type="button" onClick={onClose} aria-label="Đóng" className="rounded-lg p-1 text-slate-400 hover:bg-slate-100">
+            <X size={18} />
+          </button>
+        </div>
+
+        {showQr && bank && (
+          <div className="text-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={vietQrUrl(bank, qrAmount, result.code)}
+              alt={`Mã QR chuyển khoản ${vnd(qrAmount)}`}
+              className="mx-auto w-56 rounded-xl border border-slate-200"
+            />
+            <p className="mt-2 text-sm font-medium">Quét để chuyển {vnd(qrAmount)}</p>
+            <p className="text-xs text-slate-500">Nội dung: {result.code}</p>
+          </div>
+        )}
+        {!showQr && !bank && (method === "transfer" || due > 0) && (
+          <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Muốn hiện mã QR tự động? Chủ cửa hàng điền tài khoản ngân hàng ở Cài đặt.
+          </p>
+        )}
+
+        <div className="flex gap-2">
+          <a
+            href={printUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand-600 py-2.5 text-sm font-medium text-white hover:bg-brand-700"
+          >
+            <Printer size={16} /> In hoá đơn
+          </a>
+          <button type="button" onClick={onClose} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-100">
+            Đơn mới
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -29,7 +29,7 @@ const Input = z.object({
 export type CheckoutInput = z.infer<typeof Input>;
 
 export type CheckoutResult =
-  | { ok: true; code: string; total: number; paid: number; status: string; points: number }
+  | { ok: true; orderId: string; code: string; total: number; paid: number; status: string; points: number }
   | { ok: false; error: string };
 
 export async function checkout(raw: CheckoutInput): Promise<CheckoutResult> {
@@ -68,6 +68,7 @@ export async function checkout(raw: CheckoutInput): Promise<CheckoutResult> {
   revalidatePath("/customers");
   return {
     ok: true,
+    orderId: String(data.order_id),
     code: String(data.code),
     total: Number(data.total),
     paid: Number(data.paid),

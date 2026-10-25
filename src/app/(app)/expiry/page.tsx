@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { Badge, Notice, PageHeader, StatCard, Table } from "@/components/ui";
+import { Badge, Field, Notice, PageHeader, SubmitButton, inputClass, StatCard, Table } from "@/components/ui";
 import { getMembership } from "@/lib/auth";
 import { listExpiring } from "@/lib/data/repo";
 import { env, isSupabaseConfigured } from "@/lib/env";
 import { EXPIRY_LABEL, EXPIRY_TONE, daysText, expiryLevel, fmtDate } from "@/lib/expiry";
 import { can } from "@/lib/rbac";
-import { disposeBatch } from "./actions";
+import { disposeBatch, updateBatch } from "./actions";
 
 const WINDOWS = [30, 60, 90];
 
@@ -65,14 +65,29 @@ export default async function ExpiryPage({
               <td className="td">{r.quantity}</td>
               <td className="td">{fmtDate(r.expiryDate)} <span className="text-slate-500">({daysText(r.daysLeft)})</span></td>
               <td className="td"><Badge tone={EXPIRY_TONE[level]}>{EXPIRY_LABEL[level]}</Badge></td>
-              <td className="td text-right">
-                {canDispose && r.daysLeft < 0 && (
-                  <form action={disposeBatch}>
-                    <input type="hidden" name="batchId" value={r.id} />
-                    <button className="rounded-lg border border-rose-200 px-3 py-1 text-xs text-rose-700 hover:bg-rose-50">
-                      Huỷ lô
-                    </button>
-                  </form>
+              <td className="td">
+                {canDispose && (
+                  <div className="flex items-start justify-end gap-2">
+                    <details>
+                      <summary className="cursor-pointer rounded-lg border border-slate-200 px-3 py-1 text-xs text-slate-700 hover:bg-slate-100">
+                        Sửa
+                      </summary>
+                      <form action={updateBatch} className="mt-2 w-60 space-y-2 rounded-xl border border-slate-200 bg-white p-3 text-left">
+                        <input type="hidden" name="batchId" value={r.id} />
+                        <Field label="Hạn sử dụng"><input name="expiry" type="date" required defaultValue={r.expiryDate} className={inputClass} /></Field>
+                        <Field label="Số lô"><input name="batchCode" defaultValue={r.batchCode} className={inputClass} /></Field>
+                        <SubmitButton>Lưu</SubmitButton>
+                      </form>
+                    </details>
+                    {r.daysLeft < 0 && (
+                      <form action={disposeBatch}>
+                        <input type="hidden" name="batchId" value={r.id} />
+                        <button className="rounded-lg border border-rose-200 px-3 py-1 text-xs text-rose-700 hover:bg-rose-50">
+                          Huỷ lô
+                        </button>
+                      </form>
+                    )}
+                  </div>
                 )}
               </td>
             </tr>
