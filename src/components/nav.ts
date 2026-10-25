@@ -23,3 +23,11 @@ export const NAV = [
 
 /** 4 mục hay dùng nhất, ghim ở thanh dưới trên điện thoại (mục thứ 5 là "Menu"). */
 export const PINNED = ["/dashboard", "/pos", "/orders", "/appointments"] as const;
+
+/** Nhóm mục trên thanh bên (màn hình lớn) để dễ tìm hơn. */
+export const GROUPS: { title: string; hrefs: string[] }[] = [
+  { title: "Bán hàng", hrefs: ["/dashboard", "/pos", "/orders", "/appointments"] },
+  { title: "Hàng hoá & kho", hrefs: ["/products", "/inventory", "/purchases", "/suppliers", "/transfers", "/expiry"] },
+  { title: "Khách hàng & nhân sự", hrefs: ["/customers", "/staff"] },
+  { title: "Quản trị", hrefs: ["/reports", "/ai", "/settings"] },
+];
