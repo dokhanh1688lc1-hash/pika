@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { signOut } from "@/app/login/actions";
+import { MobileNav } from "@/components/MobileNav";
 import { Sidebar } from "@/components/Sidebar";
 import { getMembership } from "@/lib/auth";
 import { listExpiring } from "@/lib/data/repo";
@@ -25,9 +26,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const soon = expiring.length - expired;
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen flex-col md:flex-row">
       <Sidebar />
-      <main className="min-w-0 flex-1 p-6 md:p-8 print:p-0">
+      <div className="min-w-0 flex-1">
+      <MobileNav />
+      <main className="p-4 pb-24 md:p-8 md:pb-8 print:p-0">
         {demo && (
           <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 print:hidden">
             Đang chạy chế độ demo (chưa cấu hình Supabase) — dữ liệu hiển thị là dữ liệu mẫu.
@@ -63,6 +66,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         )}
         {children}
       </main>
+      </div>
     </div>
   );
 }
