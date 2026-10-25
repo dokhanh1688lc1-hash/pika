@@ -11,9 +11,15 @@ export const env = {
     .filter(Boolean),
   anthropicKey: process.env.ANTHROPIC_API_KEY ?? "",
   aiModel: process.env.AI_MODEL ?? "claude-sonnet-5-5",
+  // Phương án miễn phí: Google Gemini (khoá lấy ở https://aistudio.google.com/apikey)
+  geminiKey: process.env.GEMINI_API_KEY ?? "",
+  geminiModel: process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
   cronSecret: process.env.CRON_SECRET ?? "",
   expiryAlertDays: Math.max(1, Number(process.env.EXPIRY_ALERT_DAYS) || 30),
 };
 
 export const isSupabaseConfigured = () =>
   Boolean(env.supabaseUrl && env.supabaseServiceKey);
+
+/** Có ít nhất một nhà cung cấp AI được cấu hình (Anthropic hoặc Gemini). */
+export const isAiConfigured = () => Boolean(env.anthropicKey || env.geminiKey);

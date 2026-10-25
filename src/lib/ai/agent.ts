@@ -1,17 +1,17 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { env } from "@/lib/env";
+import { askGemini } from "./gemini";
+import { SYSTEM_PROMPT } from "./prompt";
 import { agentTools, runTool } from "./tools";
 
-const SYSTEM_PROMPT = `Bạn là trợ lý vận hành của phần mềm Beauty AI Manager cho cửa hàng/spa/salon làm đẹp.
-- Trả lời bằng tiếng Việt, ngắn gọn, đúng số liệu; tiền tệ định dạng VND.
-- Luôn dùng công cụ để lấy số liệu thực, không tự bịa số.
-- Bạn chỉ có quyền đọc dữ liệu. Nếu được yêu cầu thay đổi dữ liệu, hãy hướng dẫn người dùng thao tác trong ứng dụng.`;
 
 const MAX_STEPS = 6;
 
 export async function askAgent(question: string, storeId?: string): Promise<string> {
+  // Ưu tiên Anthropic nếu có khoá; không thì dùng Gemini (có gói miễn phí)
   if (!env.anthropicKey) {
-    return "AI Agent chưa được cấu hình (thiếu ANTHROPIC_API_KEY).";
+    if (env.geminiKey) return askGemini(question, storeId);
+    return "AI Agent chưa được cấu hình (thiếu ANTHROPIC_API_KEY hoặc GEMINI_API_KEY).";
   }
   const client = new Anthropic({ apiKey: env.anthropicKey });
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: question }];

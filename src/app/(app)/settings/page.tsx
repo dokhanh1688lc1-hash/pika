@@ -3,7 +3,7 @@ import { getMembership } from "@/lib/auth";
 import { getStoreInfo } from "@/lib/data/repo";
 import { BANKS } from "@/lib/vietqr";
 import { can } from "@/lib/rbac";
-import { env, isSupabaseConfigured } from "@/lib/env";
+import { env, isAiConfigured, isSupabaseConfigured } from "@/lib/env";
 import { ROLE_LABEL, ROLE_PERMISSIONS, type Role } from "@/lib/rbac";
 import { headers } from "next/headers";
 import { telegramStatus } from "@/lib/telegram/admin";
@@ -26,7 +26,7 @@ export default async function SettingsPage({
   const integrations = [
     ["Cơ sở dữ liệu (Supabase)", db],
     ["Telegram Bot", Boolean(env.telegramToken && env.telegramSecret)],
-    ["AI Agent (Anthropic)", Boolean(env.anthropicKey)],
+    [`AI Agent (${env.anthropicKey ? "Anthropic" : env.geminiKey ? "Gemini" : "chưa chọn"})`, isAiConfigured()],
   ] as const;
 
   return (

@@ -87,6 +87,12 @@ Nhân viên khác: họ tạo tài khoản rồi bạn thêm họ vào cửa hà
 4. Mở `https://<app>.vercel.app/api/telegram/webhook` bằng trình duyệt: thấy `"ok":true` là route đã chạy.
 5. Bot hiểu: `/doanhthu`, `/tonkho`, `/hethan`, `/id` (xem mã chat), `/help`, và câu hỏi tự nhiên (cần `ANTHROPIC_API_KEY`).
 
+## Trợ lý AI miễn phí (Google Gemini)
+1. Vào https://aistudio.google.com/apikey, đăng nhập Gmail → **Create API key** (gói miễn phí, không cần thẻ; có giới hạn số lượt mỗi phút / ngày do Google quy định).
+2. Trên Vercel thêm biến `GEMINI_API_KEY` = khoá vừa tạo → Redeploy (bỏ tích build cache).
+3. Không cần `ANTHROPIC_API_KEY`. Có cả hai khoá thì app ưu tiên Anthropic. Tuỳ chọn: `GEMINI_MODEL` để đổi model (mặc định `gemini-2.5-flash`).
+4. Kiểm tra `/api/health` thấy `"ai":"configured (gemini)"`, rồi hỏi thử ở trang Trợ lý AI hoặc qua bot Telegram.
+
 ## Cập nhật khi có phiên bản mới (quan trọng)
 Mỗi khi `supabase/setup.sql` thay đổi (ví dụ giai đoạn 2 thêm hàm bán hàng và nhập kho), hãy **dán lại toàn bộ file và Run** trong SQL Editor. File chạy lại an toàn, không xoá dữ liệu.
 Nếu bỏ qua bước này, POS và nhập kho sẽ báo lỗi kiểu `Could not find the function public.create_pos_order`.
