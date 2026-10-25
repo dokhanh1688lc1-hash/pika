@@ -1,6 +1,6 @@
 "use client";
 
-import { Minus, Plus, Printer, Trash2, X } from "lucide-react";
+import { Minus, Plus, Printer, ShoppingCart, Trash2, X } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 import { checkout, type CheckoutResult } from "@/app/(app)/pos/actions";
 import { vnd } from "@/lib/format";
@@ -28,7 +28,15 @@ const METHODS = [
 ] as const;
 
 const field =
-  "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-400";
+  "w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-base outline-none focus:border-brand-400 sm:py-2 sm:text-sm";
+
+const KINDS = [
+  { key: "all", label: "Tất cả" },
+  { key: "goods", label: "Hàng hoá" },
+  { key: "service", label: "Dịch vụ" },
+  { key: "package", label: "Liệu trình" },
+] as const;
+const QUICK_CASH = [50_000, 100_000, 200_000, 500_000];
 
 const toNumber = (s: string) => {
   const n = Number(s.replace(/[.,\s]/g, ""));
@@ -55,13 +63,19 @@ export function PosTerminal({
   const [result, setResult] = useState<CheckoutResult | null>(null);
   const [paidWith, setPaidWith] = useState<string>("cash");
   const [showDone, setShowDone] = useState(false);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [kind, setKind] = useState<(typeof KINDS)[number]["key"]>("all");
   const [pending, startTransition] = useTransition();
 
   const byId = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return products.filter((p) => !q || p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q));
-  }, [products, query]);
+    return products.filter(
+      (p) =>
+        (kind === "all" || p.kind === kind) &&
+        (!q || p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)),
+    );
+  }, [products, query, kind]);
 
   const lines = Object.entries(cart)
     .map(([id, qty]) => ({ product: byId.get(id), qty }))
@@ -72,6 +86,7 @@ export function PosTerminal({
   const paid = paidText === "" ? total : toNumber(paidText);
   const change = method === "cash" ? Math.max(paid - total, 0) : 0;
   const owing = Math.max(total - paid, 0);
+  const itemCount = lines.reduce((n, l) => n + l.qty, 0);
 
   function add(p: PosProduct) {
     setResult(null);
@@ -115,6 +130,7 @@ export function PosTerminal({
       if (res.ok) {
         setPaidWith(method);
         setShowDone(true);
+        setCartOpen(false);
         setCart({});
         setPaidText("");
         setDiscountText("");
@@ -126,13 +142,31 @@ export function PosTerminal({
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       <section className="lg:col-span-2">
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Tìm theo tên hoặc mã…"
-          className={`${field} mb-4`}
-        />
-        <div className="grid auto-rows-min gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="sticky top-12 z-20 -mx-4 mb-3 space-y-2 bg-slate-50 px-4 pb-2 pt-2 md:static md:mx-0 md:px-0 md:pt-0 lg:top-0">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Tìm theo tên hoặc mã…"
+            className={field}
+            type="search"
+            enterKeyHint="search"
+          />
+          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:px-0">
+            {KINDS.map((k) => (
+              <button
+                key={k.key}
+                type="button"
+                onClick={() => setKind(k.key)}
+                className={`shrink-0 rounded-full px-4 py-1.5 text-sm ${
+                  kind === k.key ? "bg-brand-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"
+                }`}
+              >
+                {k.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="grid auto-rows-min grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3">
           {shown.map((p) => {
             const out = p.kind === "goods" && (p.stock ?? 0) <= 0;
             return (
@@ -141,15 +175,20 @@ export function PosTerminal({
                 type="button"
                 disabled={out}
                 onClick={() => add(p)}
-                className="card text-left transition hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-50"
+                className="card relative p-3 text-left transition hover:border-brand-300 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:p-5"
               >
+                {cart[p.id] ? (
+                  <span className="absolute right-2 top-2 z-10 grid h-6 min-w-6 place-items-center rounded-full bg-brand-600 px-1.5 text-xs font-semibold text-white">
+                    {cart[p.id]}
+                  </span>
+                ) : null}
                 {p.imageUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={p.imageUrl} alt="" loading="lazy" className="mb-2 aspect-[4/3] w-full rounded-lg object-cover" />
                 )}
                 <p className="text-xs text-slate-400">{p.sku}</p>
-                <p className="mt-1 font-medium">{p.name}</p>
-                <p className="mt-2 text-brand-700">{vnd(p.price)}</p>
+                <p className="mt-1 line-clamp-2 text-sm font-medium sm:text-base">{p.name}</p>
+                <p className="mt-1 text-sm text-brand-700 sm:mt-2 sm:text-base">{vnd(p.price)}</p>
                 {p.kind === "goods" && (
                   <p className={`mt-1 text-xs ${out ? "text-rose-600" : "text-slate-500"}`}>
                     {out ? "Hết hàng" : `Còn ${p.stock}`}
@@ -162,8 +201,17 @@ export function PosTerminal({
         </div>
       </section>
 
-      <aside className="card h-fit space-y-4">
-        <h2 className="font-medium">Đơn hàng hiện tại</h2>
+      <aside
+        className={`space-y-4 bg-white p-4 lg:card lg:static lg:block lg:h-fit lg:overflow-visible lg:p-5 ${
+          cartOpen ? "fixed inset-0 z-40 block overflow-y-auto pb-28" : "hidden"
+        }`}
+      >
+        <div className="flex items-center justify-between">
+          <h2 className="font-medium">Đơn hàng hiện tại</h2>
+          <button type="button" onClick={() => setCartOpen(false)} aria-label="Đóng giỏ hàng" className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 lg:hidden">
+            <X size={22} />
+          </button>
+        </div>
 
         {result?.ok === false && (
           <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{result.error}</p>
@@ -188,14 +236,14 @@ export function PosTerminal({
                   <p className="text-slate-500">{vnd(product.price)} × {qty}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
-                  <button type="button" onClick={() => change1(product.id, -1)} className="rounded-lg border p-1" aria-label="Giảm">
+                  <button type="button" onClick={() => change1(product.id, -1)} className="rounded-lg border p-2 sm:p-1" aria-label="Giảm">
                     <Minus size={14} />
                   </button>
                   <span className="w-6 text-center">{qty}</span>
-                  <button type="button" onClick={() => change1(product.id, 1)} className="rounded-lg border p-1" aria-label="Tăng">
+                  <button type="button" onClick={() => change1(product.id, 1)} className="rounded-lg border p-2 sm:p-1" aria-label="Tăng">
                     <Plus size={14} />
                   </button>
-                  <button type="button" onClick={() => remove(product.id)} className="rounded-lg p-1 text-rose-600" aria-label="Xoá">
+                  <button type="button" onClick={() => remove(product.id)} className="rounded-lg p-2 text-rose-600 sm:p-1" aria-label="Xoá">
                     <Trash2 size={14} />
                   </button>
                 </div>
@@ -222,6 +270,18 @@ export function PosTerminal({
         </div>
         <input value={paidText} onChange={(e) => setPaidText(e.target.value)}
           inputMode="numeric" placeholder={`Khách đưa (mặc định ${vnd(total)})`} className={field} />
+        {method === "cash" && total > 0 && (
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => setPaidText("")} className="rounded-full bg-slate-100 px-3 py-1.5 text-sm text-slate-700">
+              Vừa đủ
+            </button>
+            {QUICK_CASH.filter((v) => v >= total).slice(0, 3).map((v) => (
+              <button key={v} type="button" onClick={() => setPaidText(String(v))} className="rounded-full bg-slate-100 px-3 py-1.5 text-sm text-slate-700">
+                {v.toLocaleString("vi-VN")}
+              </button>
+            ))}
+          </div>
+        )}
         <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ghi chú" className={field} />
 
         <dl className="space-y-1 border-t pt-3 text-sm">
@@ -236,12 +296,26 @@ export function PosTerminal({
           type="button"
           onClick={submit}
           disabled={pending || lines.length === 0 || demo}
-          className="w-full rounded-xl bg-brand-600 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+          className="sticky bottom-3 w-full rounded-xl bg-brand-600 py-3 text-base font-medium text-white shadow-lg hover:bg-brand-700 disabled:opacity-50 lg:static lg:py-2.5 lg:text-sm lg:shadow-none"
         >
           {pending ? "Đang xử lý…" : "Thanh toán"}
         </button>
         {demo && <p className="text-xs text-slate-500">Chế độ demo: kết nối Supabase để tạo đơn thật.</p>}
       </aside>
+      {/* Thanh giỏ hàng nổi trên điện thoại, nằm ngay trên thanh điều hướng dưới */}
+      {lines.length > 0 && !cartOpen && (
+        <button
+          type="button"
+          onClick={() => setCartOpen(true)}
+          className="fixed inset-x-3 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 flex items-center justify-between rounded-2xl bg-brand-600 px-4 py-3 text-white shadow-xl lg:hidden"
+        >
+          <span className="flex items-center gap-2 text-sm">
+            <ShoppingCart size={18} /> Giỏ hàng · {itemCount} món
+          </span>
+          <span className="font-semibold">{vnd(total)} ›</span>
+        </button>
+      )}
+
       {showDone && result?.ok && (
         <DoneDialog result={result} method={paidWith} bank={bank} onClose={() => setShowDone(false)} />
       )}
