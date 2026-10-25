@@ -80,6 +80,13 @@ Nhân viên khác: họ tạo tài khoản rồi bạn thêm họ vào cửa hà
 3. **Lịch hẹn**: đặt lịch, sửa giờ / dịch vụ / nhân viên, đổi trạng thái (Bắt đầu, Hoàn thành, Huỷ, Đặt lại) và xoá. Một nhân viên không thể có hai lịch chồng giờ (thời lượng lấy theo dịch vụ, mặc định 60 phút).
 4. **Nhóm hàng**: trang Hàng hoá & dịch vụ → "Quản lý nhóm hàng" để đổi tên hoặc xoá nhóm (sản phẩm trong nhóm chuyển sang chưa phân nhóm).
 
+## Telegram: bot không trả lời
+1. Trên Vercel phải có `TELEGRAM_BOT_TOKEN` (từ @BotFather) và `TELEGRAM_WEBHOOK_SECRET` (chỉ chữ, số, `_`, `-`), sau đó Redeploy.
+2. Đăng nhập web bằng tài khoản chủ cửa hàng → **Cài đặt → Telegram Bot — trạng thái & đăng ký webhook** → bấm **Đăng ký webhook**. Không cần gõ URL hay lệnh thủ công. Mục này hiện token đúng/sai, webhook trỏ đúng địa chỉ chưa và lỗi gần nhất Telegram gặp.
+3. Cùng trang đó: **Tạo mã liên kết** → nhắn bot `/start <mã>` → bấm **Gửi tin thử cho tôi** để kiểm tra.
+4. Mở `https://<app>.vercel.app/api/telegram/webhook` bằng trình duyệt: thấy `"ok":true` là route đã chạy.
+5. Bot hiểu: `/doanhthu`, `/tonkho`, `/hethan`, `/id` (xem mã chat), `/help`, và câu hỏi tự nhiên (cần `ANTHROPIC_API_KEY`).
+
 ## Cập nhật khi có phiên bản mới (quan trọng)
 Mỗi khi `supabase/setup.sql` thay đổi (ví dụ giai đoạn 2 thêm hàm bán hàng và nhập kho), hãy **dán lại toàn bộ file và Run** trong SQL Editor. File chạy lại an toàn, không xoá dữ liệu.
 Nếu bỏ qua bước này, POS và nhập kho sẽ báo lỗi kiểu `Could not find the function public.create_pos_order`.

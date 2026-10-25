@@ -4,6 +4,9 @@ import { randomBytes } from "node:crypto";
 import { redirect } from "next/navigation";
 import { getMembership } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
+import { env } from "@/lib/env";
+import { isValidSecret, tgCall } from "@/lib/telegram/admin";
 import { redirectMsg, requireMember } from "@/lib/guard";
 import { toText } from "@/lib/parse";
 import { BANKS } from "@/lib/vietqr";
@@ -45,4 +48,51 @@ export async function saveStoreInfo(form: FormData) {
   revalidatePath("/settings");
   revalidatePath("/pos");
   return redirectMsg("/settings", "ok", "Đã lưu thông tin cửa hàng.");
+}
+
+/** Địa chỉ gốc của trang web đang mở (vd https://pika-beauty.vercel.app). */
+async function appOrigin(): Promise<string> {
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  return host ? `${proto}://${host}` : "";
+}
+
+/** Đăng ký webhook Telegram trỏ về chính website này, dùng token và secret đã đặt trên Vercel. */
+export async function registerTelegramWebhook() {
+  await requireMember("settings.manage", "/settings");
+  if (!env.telegramToken) return redirectMsg("/settings", "error", "Chưa có biến TELEGRAM_BOT_TOKEN trên Vercel.");
+  if (!env.telegramSecret) return redirectMsg("/settings", "error", "Chưa có biến TELEGRAM_WEBHOOK_SECRET trên Vercel.");
+  if (!isValidSecret(env.telegramSecret)) {
+    return redirectMsg("/settings", "error", "TELEGRAM_WEBHOOK_SECRET chỉ được gồm chữ, số, gạch dưới (_) và gạch ngang (-). Hãy đổi lại trên Vercel rồi Redeploy.");
+  }
+  const origin = await appOrigin();
+  if (!origin.startsWith("https://")) return redirectMsg("/settings", "error", "Telegram chỉ nhận địa chỉ https. Hãy mở trang này từ địa chỉ Vercel.");
+
+  const url = `${origin}/api/telegram/webhook`;
+  const r = await tgCall("setWebhook", {
+    url, secret_token: env.telegramSecret, allowed_updates: ["message"], drop_pending_updates: true,
+  });
+  if (!r.ok) return redirectMsg("/settings", "error", `Telegram từ chối: ${r.error}`);
+  revalidatePath("/settings");
+  return redirectMsg("/settings", "ok", `Đã đăng ký webhook: ${url}`);
+}
+
+export async function removeTelegramWebhook() {
+  await requireMember("settings.manage", "/settings");
+  const r = await tgCall("deleteWebhook", { drop_pending_updates: true });
+  if (!r.ok) return redirectMsg("/settings", "error", `Telegram từ chối: ${r.error}`);
+  revalidatePath("/settings");
+  return redirectMsg("/settings", "ok", "Đã gỡ webhook.");
+}
+
+/** Gửi một tin thử tới chat Telegram đã liên kết với tài khoản của bạn. */
+export async function sendTelegramTest() {
+  const m = await requireMember("settings.manage", "/settings");
+  const { data } = await getAdminClient()
+    .from("telegram_links").select("chat_id").eq("staff_id", m.staffId).eq("active", true).not("chat_id", "is", null).limit(1).maybeSingle();
+  if (!data?.chat_id) return redirectMsg("/settings", "error", "Bạn chưa liên kết Telegram: tạo mã liên kết rồi nhắn /start <mã> cho bot.");
+  const r = await tgCall("sendMessage", { chat_id: data.chat_id, text: "Tin nhắn thử từ Beauty AI: bot đã kết nối thành công." });
+  if (!r.ok) return redirectMsg("/settings", "error", `Gửi không được: ${r.error}`);
+  return redirectMsg("/settings", "ok", "Đã gửi tin thử, kiểm tra Telegram của bạn.");
 }

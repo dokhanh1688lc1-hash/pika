@@ -5,7 +5,7 @@ import { formatExpiryMessage } from "@/lib/expiry";
 import { vnd } from "@/lib/format";
 import { can, type Role } from "@/lib/rbac";
 import { getAdminClient } from "@/lib/supabase/admin";
-import { sendTelegramMessage } from "./api";
+import { sendTelegramMessage, sendTyping } from "./api";
 
 export interface TelegramUpdate {
   message?: { chat: { id: number }; text?: string; from?: { id: number } };
@@ -48,10 +48,17 @@ async function linkChat(chatId: number, code: string): Promise<string> {
   if (!isSupabaseConfigured()) return "Hệ thống chưa cấu hình cơ sở dữ liệu.";
   const db = getAdminClient();
   const { data } = await db
-    .from("telegram_links").select("id").eq("link_code", code).eq("active", false).maybeSingle();
-  if (!data) return "Mã liên kết không hợp lệ hoặc đã dùng.";
-  await db.from("telegram_links")
+    .from("telegram_links").select("id, staff_id").eq("link_code", code).eq("active", false).maybeSingle();
+  if (!data) return "Mã liên kết không hợp lệ hoặc đã dùng. Tạo mã mới ở Cài đặt trên web.";
+
+  // Một chat chỉ gắn với một tài khoản: gỡ liên kết cũ của chat này (nếu có) trước khi gắn mới
+  await db.from("telegram_links").delete().eq("chat_id", chatId).neq("id", data.id);
+  const { error } = await db.from("telegram_links")
     .update({ chat_id: chatId, active: true, link_code: null }).eq("id", data.id);
+  if (error) {
+    console.error("telegram: liên kết lỗi", error);
+    return `Không liên kết được: ${error.message}`;
+  }
   return "Liên kết thành công. Gõ /help để xem lệnh.";
 }
 
@@ -59,6 +66,7 @@ const HELP = `Lệnh khả dụng:
 /doanhthu — doanh thu hôm nay
 /tonkho — sản phẩm sắp hết hàng
 /hethan — lô hàng hết hạn / sắp hết hạn
+/id — xem mã chat của bạn
 /help — trợ giúp
 Hoặc nhắn tự nhiên, ví dụ: "khách Lan còn bao nhiêu điểm?"`;
 
@@ -68,9 +76,16 @@ export async function handleUpdate(update: TelegramUpdate) {
   const msg = update.message;
   if (!msg?.text) return;
   const chatId = msg.chat.id;
-  const text = msg.text.trim();
+  // Chuẩn hoá lệnh: "/Doanhthu@TenBot abc" -> "/doanhthu abc" (trong nhóm Telegram tự thêm @tenbot)
+  let text = msg.text.trim();
+  if (text.startsWith("/")) {
+    const [head, ...rest] = text.split(/\s+/);
+    text = [head.replace(/@\w+$/, "").toLowerCase(), ...rest].join(" ");
+  }
 
-  if (text.startsWith("/start")) {
+  if (text === "/id") return sendTelegramMessage(chatId, `Mã chat của bạn: ${chatId}`);
+
+  if (text === "/start" || text.startsWith("/start ")) {
     const code = text.split(/\s+/)[1];
     if (code) return sendTelegramMessage(chatId, await linkChat(chatId, code));
     if (await resolveActor(chatId)) return sendTelegramMessage(chatId, HELP);
@@ -121,5 +136,6 @@ export async function handleUpdate(update: TelegramUpdate) {
   }
 
   if (!can(actor.role, "ai.use")) return sendTelegramMessage(chatId, DENIED);
+  await sendTyping(chatId);
   return sendTelegramMessage(chatId, await askAgent(text, actor.storeId));
 }
