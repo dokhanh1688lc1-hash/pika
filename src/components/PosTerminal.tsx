@@ -59,6 +59,7 @@ export function PosTerminal({
   const [method, setMethod] = useState<(typeof METHODS)[number]["value"]>("cash");
   const [paidText, setPaidText] = useState("");
   const [discountText, setDiscountText] = useState("");
+  const [discountMode, setDiscountMode] = useState<"amount" | "percent">("amount");
   const [note, setNote] = useState("");
   const [result, setResult] = useState<CheckoutResult | null>(null);
   const [paidWith, setPaidWith] = useState<string>("cash");
@@ -81,7 +82,13 @@ export function PosTerminal({
     .map(([id, qty]) => ({ product: byId.get(id), qty }))
     .filter((l): l is { product: PosProduct; qty: number } => Boolean(l.product));
   const subtotal = lines.reduce((sum, l) => sum + l.product.price * l.qty, 0);
-  const discount = Math.min(toNumber(discountText), subtotal);
+  // Giảm theo %: nhận số thập phân (vd 7,5), tối đa 100%
+  const percent =
+    discountMode === "percent"
+      ? Math.min(Math.max(Number(discountText.replace(",", ".")) || 0, 0), 100)
+      : 0;
+  const discount =
+    discountMode === "percent" ? Math.round((subtotal * percent) / 100) : Math.min(toNumber(discountText), subtotal);
   const total = subtotal - discount;
   const paid = paidText === "" ? total : toNumber(paidText);
   const change = method === "cash" ? Math.max(paid - total, 0) : 0;
@@ -124,6 +131,7 @@ export function PosTerminal({
         method,
         paid: Math.min(paid, total + change),
         discount,
+        discountPercent: percent,
         note: note.trim(),
       });
       setResult(res);
@@ -261,9 +269,33 @@ export function PosTerminal({
           {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="flex gap-2">
           <input value={discountText} onChange={(e) => setDiscountText(e.target.value)}
-            inputMode="numeric" placeholder="Giảm giá (đ)" className={field} />
+            inputMode="decimal" placeholder={discountMode === "percent" ? "Giảm giá (%)" : "Giảm giá (đ)"} className={field} />
+          <div className="flex shrink-0 overflow-hidden rounded-xl border border-slate-200 text-sm" role="group" aria-label="Kiểu giảm giá">
+            {(["amount", "percent"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => { setDiscountMode(m); setDiscountText(""); }}
+                aria-pressed={discountMode === m}
+                className={`px-3 ${discountMode === m ? "bg-brand-600 text-white" : "bg-white text-slate-600"}`}
+              >
+                {m === "amount" ? "đ" : "%"}
+              </button>
+            ))}
+          </div>
+        </div>
+        {discountMode === "percent" && (
+          <div className="flex flex-wrap gap-2">
+            {[5, 10, 15, 20].map((v) => (
+              <button key={v} type="button" onClick={() => setDiscountText(String(v))} className="rounded-full bg-slate-100 px-3 py-1.5 text-sm text-slate-700">
+                {v}%
+              </button>
+            ))}
+          </div>
+        )}
+        <div>
           <select value={method} onChange={(e) => setMethod(e.target.value as typeof method)} className={field}>
             {METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
           </select>
@@ -286,7 +318,7 @@ export function PosTerminal({
 
         <dl className="space-y-1 border-t pt-3 text-sm">
           <div className="flex justify-between"><dt>Tạm tính</dt><dd>{vnd(subtotal)}</dd></div>
-          {discount > 0 && <div className="flex justify-between"><dt>Giảm giá</dt><dd>−{vnd(discount)}</dd></div>}
+          {discount > 0 && <div className="flex justify-between"><dt>Giảm giá{discountMode === "percent" && percent > 0 ? ` (${percent}%)` : ""}</dt><dd>−{vnd(discount)}</dd></div>}
           <div className="flex justify-between text-base font-semibold"><dt>Tổng cộng</dt><dd>{vnd(total)}</dd></div>
           {change > 0 && <div className="flex justify-between text-slate-600"><dt>Tiền thối</dt><dd>{vnd(change)}</dd></div>}
           {owing > 0 && <div className="flex justify-between text-amber-700"><dt>Còn nợ</dt><dd>{vnd(owing)}</dd></div>}
