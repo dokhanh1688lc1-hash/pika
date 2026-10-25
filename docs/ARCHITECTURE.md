@@ -1,4 +1,4 @@
-# Kiến trúc Beauty AI Manager
+# Kiến trúc PiKa Store
 
 ## Tổng quan
 

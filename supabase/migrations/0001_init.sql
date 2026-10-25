@@ -1,4 +1,4 @@
--- Beauty AI Manager — schema nền tảng (multi-tenant, RLS)
+-- PiKa Store — schema nền tảng (multi-tenant, RLS)
 -- Mọi bảng nghiệp vụ đều có store_id; người dùng chỉ thấy dữ liệu cửa hàng của mình.
 
 create extension if not exists "pgcrypto";

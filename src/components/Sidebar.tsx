@@ -41,7 +41,7 @@ export function Sidebar() {
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-600 text-white">
           <Sparkles size={18} />
         </span>
-        {!collapsed && <span className="text-lg font-semibold text-brand-700">Beauty AI</span>}
+        {!collapsed && <span className="text-lg font-semibold text-brand-700">PiKa Store</span>}
       </div>
 
       {/* Khu vực cuộn: thanh cuộn mảnh, không kéo theo cả trang */}
@@ -83,7 +83,7 @@ export function Sidebar() {
       </nav>
 
       <div className={`flex shrink-0 items-center border-t border-slate-100 p-3 ${collapsed ? "justify-center" : "justify-between"}`}>
-        {!collapsed && <span className="px-2 text-xs text-slate-400">v0.1 • Beauty AI</span>}
+        {!collapsed && <span className="px-2 text-xs text-slate-400">v0.1 • PiKa Store</span>}
         <button
           type="button"
           onClick={toggle}

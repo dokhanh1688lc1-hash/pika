@@ -1,5 +1,5 @@
 {
-  "name": "beauty-ai-manager",
+  "name": "pika-store",
   "version": "0.1.0",
   "private": true,
   "description": "Phần mềm quản lý kinh doanh Beauty (POS, kho, khách hàng, lịch hẹn, nhân viên) tích hợp Telegram Bot và AI Agent",

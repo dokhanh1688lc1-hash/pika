@@ -1,4 +1,4 @@
--- Beauty AI Manager — CÀI ĐẶT CSDL (an toàn khi chạy lại nhiều lần)
+-- PiKa Store — CÀI ĐẶT CSDL (an toàn khi chạy lại nhiều lần)
 -- Dán toàn bộ file này vào Supabase > SQL Editor > Run.
 -- Đã có bảng/kiểu nào thì bỏ qua, chỉ tạo phần còn thiếu; không xoá dữ liệu.
 

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Beauty AI Manager",
+  title: "PiKa Store",
   description: "Quản lý bán hàng, kho, khách hàng, lịch hẹn cho ngành làm đẹp — tích hợp Telegram Bot và AI Agent",
 };
 

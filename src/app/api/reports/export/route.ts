@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
   const mod = await import("exceljs");
   const ExcelJS = (mod as unknown as { default?: typeof mod }).default ?? mod;
   const wb = new ExcelJS.Workbook();
-  wb.creator = "Beauty AI Manager";
+  wb.creator = "PiKa Store";
   const money = "#,##0";
 
   const sheet = (name: string, columns: { header: string; key: string; width: number; money?: boolean }[], rows: object[]) => {

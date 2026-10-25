@@ -1,4 +1,4 @@
-# Beauty AI Manager
+# PiKa Store
 
 Phần mềm quản lý kinh doanh cho ngành làm đẹp (spa, salon, mỹ phẩm) theo hướng tương đương KiotViet: bán hàng POS, kho, khách hàng, lịch hẹn, nhân viên, báo cáo — tích hợp **Web App**, **Telegram Bot** và **AI Agent**.
 

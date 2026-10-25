@@ -92,7 +92,7 @@ export async function sendTelegramTest() {
   const { data } = await getAdminClient()
     .from("telegram_links").select("chat_id").eq("staff_id", m.staffId).eq("active", true).not("chat_id", "is", null).limit(1).maybeSingle();
   if (!data?.chat_id) return redirectMsg("/settings", "error", "Bạn chưa liên kết Telegram: tạo mã liên kết rồi nhắn /start <mã> cho bot.");
-  const r = await tgCall("sendMessage", { chat_id: data.chat_id, text: "Tin nhắn thử từ Beauty AI: bot đã kết nối thành công." });
+  const r = await tgCall("sendMessage", { chat_id: data.chat_id, text: "Tin nhắn thử từ PiKa Store: bot đã kết nối thành công." });
   if (!r.ok) return redirectMsg("/settings", "error", `Gửi không được: ${r.error}`);
   return redirectMsg("/settings", "ok", "Đã gửi tin thử, kiểm tra Telegram của bạn.");
 }

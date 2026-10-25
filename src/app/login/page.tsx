@@ -16,7 +16,7 @@ export default async function LoginPage({
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand-600 text-white">
             <Sparkles size={18} />
           </span>
-          <span className="text-lg font-semibold text-brand-700">Beauty AI Manager</span>
+          <span className="text-lg font-semibold text-brand-700">PiKa Store</span>
         </div>
         {error && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
         {info && <p className="rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-700">{info}</p>}

@@ -28,7 +28,7 @@ export function MobileNav() {
         <span className="grid h-7 w-7 place-items-center rounded-lg bg-brand-600 text-white">
           <Sparkles size={14} />
         </span>
-        <span className="font-semibold text-brand-700">Beauty AI</span>
+        <span className="font-semibold text-brand-700">PiKa Store</span>
         {current && <span className="ml-auto truncate text-sm text-slate-500">{current.label}</span>}
       </header>
 
