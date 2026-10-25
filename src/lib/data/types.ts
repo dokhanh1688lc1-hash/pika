@@ -10,6 +10,7 @@ export interface Product {
   cost: number;
   stock: number | null; // null với dịch vụ / liệu trình
   minStock: number;
+  imageUrl?: string | null;
 }
 
 export interface Customer {
@@ -64,4 +65,9 @@ export interface BatchRow {
   quantity: number;
   expiryDate: string; // YYYY-MM-DD
   daysLeft: number;   // âm = đã hết hạn
+}
+
+export interface ProductDetail extends Product {
+  active: boolean;
+  sessions: number | null;
 }

@@ -12,6 +12,7 @@ export interface PosProduct {
   kind: "goods" | "service" | "package";
   price: number;
   stock: number | null;
+  imageUrl?: string | null;
 }
 export interface PosPerson {
   id: string;
@@ -136,6 +137,10 @@ export function PosTerminal({
                 onClick={() => add(p)}
                 className="card text-left transition hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-50"
               >
+                {p.imageUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={p.imageUrl} alt="" loading="lazy" className="mb-2 aspect-[4/3] w-full rounded-lg object-cover" />
+                )}
                 <p className="text-xs text-slate-400">{p.sku}</p>
                 <p className="mt-1 font-medium">{p.name}</p>
                 <p className="mt-2 text-brand-700">{vnd(p.price)}</p>

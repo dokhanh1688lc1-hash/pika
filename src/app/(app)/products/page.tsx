@@ -1,9 +1,12 @@
+import { ImageOff } from "lucide-react";
+import Link from "next/link";
+import { ImagePicker } from "@/components/ImagePicker";
 import { Badge, Field, Notice, PageHeader, SubmitButton, Table, inputClass } from "@/components/ui";
-import { can } from "@/lib/rbac";
 import { getMembership } from "@/lib/auth";
-import { listProducts } from "@/lib/data/repo";
+import { listInactiveProducts, listProducts } from "@/lib/data/repo";
 import { isSupabaseConfigured } from "@/lib/env";
 import { vnd } from "@/lib/format";
+import { can } from "@/lib/rbac";
 import { createProduct } from "./actions";
 
 const KIND = { goods: "Hàng hoá", service: "Dịch vụ", package: "Liệu trình" } as const;
@@ -14,21 +17,23 @@ export default async function ProductsPage({
   searchParams: Promise<{ error?: string; ok?: string }>;
 }) {
   const { error, ok } = await searchParams;
-  const [products, member] = await Promise.all([
+  const [products, inactive, member] = await Promise.all([
     listProducts(),
+    listInactiveProducts(),
     isSupabaseConfigured() ? getMembership() : Promise.resolve(null),
   ]);
   const canEdit = member ? can(member.role, "products.manage") : false;
 
   return (
     <>
-      <PageHeader title="Hàng hoá & dịch vụ" subtitle="Danh mục sản phẩm, dịch vụ và liệu trình" />
+      <PageHeader title="Hàng hoá & dịch vụ" subtitle="Danh mục sản phẩm, dịch vụ và liệu trình. Bấm vào tên để xem, sửa và đổi ảnh." />
       <Notice error={error} ok={ok} />
 
       {canEdit && (
         <details className="card mb-6">
           <summary className="cursor-pointer font-medium">+ Thêm sản phẩm / dịch vụ / liệu trình</summary>
           <form action={createProduct} className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="sm:col-span-2 lg:col-span-3"><ImagePicker /></div>
             <Field label="Tên *"><input name="name" required className={inputClass} /></Field>
             <Field label="Mã (SKU) *"><input name="sku" required className={inputClass} placeholder="SP001" /></Field>
             <Field label="Loại">
@@ -50,11 +55,16 @@ export default async function ProductsPage({
         </details>
       )}
 
-      <Table head={["Mã", "Tên", "Loại", "Nhóm", "Giá bán", "Giá vốn", "Tồn"]}>
+      <Table head={["", "Mã", "Tên", "Loại", "Nhóm", "Giá bán", "Giá vốn", "Tồn"]}>
         {products.map((p) => (
           <tr key={p.id}>
+            <td className="td w-14">
+              <Thumb url={p.imageUrl} />
+            </td>
             <td className="td text-slate-500">{p.sku}</td>
-            <td className="td font-medium">{p.name}</td>
+            <td className="td font-medium">
+              <Link href={`/products/${p.id}`} className="text-brand-700 hover:underline">{p.name}</Link>
+            </td>
             <td className="td"><Badge tone="violet">{KIND[p.kind]}</Badge></td>
             <td className="td">{p.category}</td>
             <td className="td">{vnd(p.price)}</td>
@@ -63,9 +73,36 @@ export default async function ProductsPage({
           </tr>
         ))}
         {products.length === 0 && (
-          <tr><td className="td text-slate-500" colSpan={7}>Chưa có sản phẩm nào. Bấm "+ Thêm" ở trên để bắt đầu.</td></tr>
+          <tr><td className="td text-slate-500" colSpan={8}>Chưa có sản phẩm nào. Bấm "+ Thêm" ở trên để bắt đầu.</td></tr>
         )}
       </Table>
+
+      {inactive.length > 0 && (
+        <details className="card mt-6">
+          <summary className="cursor-pointer font-medium text-slate-600">Đã ngừng bán ({inactive.length})</summary>
+          <ul className="mt-3 space-y-2 text-sm">
+            {inactive.map((p) => (
+              <li key={p.id} className="flex items-center justify-between">
+                <span>{p.sku} · {p.name}</span>
+                <Link href={`/products/${p.id}`} className="text-brand-700 hover:underline">Xem / bán lại</Link>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </>
+  );
+}
+
+function Thumb({ url }: { url?: string | null }) {
+  return (
+    <span className="grid h-10 w-10 place-items-center overflow-hidden rounded-lg bg-slate-100 text-slate-300">
+      {url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
+      ) : (
+        <ImageOff size={16} />
+      )}
+    </span>
   );
 }

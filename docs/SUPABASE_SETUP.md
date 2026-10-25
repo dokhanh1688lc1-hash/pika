@@ -54,6 +54,12 @@ Nhân viên khác: họ tạo tài khoản rồi bạn thêm họ vào cửa hà
 5. Số ngày báo trước mặc định 30; đổi bằng biến `EXPIRY_ALERT_DAYS`.
 6. Hàng đã hết hạn **không bán được** ở POS. Vào mục Hạn sử dụng bấm **Huỷ lô** để trừ khỏi tồn kho.
 
+## Ảnh sản phẩm
+1. Chạy lại `supabase/setup.sql` (thêm cột `image_url`).
+2. Vào **Hàng hoá & dịch vụ**: chọn ảnh khi thêm sản phẩm, hoặc bấm tên sản phẩm để đổi / xoá ảnh, sửa thông tin, ngừng bán.
+3. Ảnh được nén về tối đa 900px (WEBP) ngay trên trình duyệt, giới hạn 2MB. Kho lưu trữ `product-images` tự tạo ở lần tải đầu tiên (không cần làm gì trong Supabase).
+4. Ảnh hiện ở danh sách sản phẩm và thẻ sản phẩm trong POS.
+
 ## Cập nhật khi có phiên bản mới (quan trọng)
 Mỗi khi `supabase/setup.sql` thay đổi (ví dụ giai đoạn 2 thêm hàm bán hàng và nhập kho), hãy **dán lại toàn bộ file và Run** trong SQL Editor. File chạy lại an toàn, không xoá dữ liệu.
 Nếu bỏ qua bước này, POS và nhập kho sẽ báo lỗi kiểu `Could not find the function public.create_pos_order`.

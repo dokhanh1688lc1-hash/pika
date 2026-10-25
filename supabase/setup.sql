@@ -279,12 +279,16 @@ create index if not exists idx_appointments_store_id_starts_at on appointments (
 create index if not exists idx_stock_movements_store_id_product_id_created_at on stock_movements (store_id, product_id, created_at desc);
 
 -- ============ Views phục vụ UI / Bot / AI ============
+-- Ảnh sản phẩm (URL công khai trong Supabase Storage, bucket product-images)
+alter table products add column if not exists image_url text;
+
 create or replace view v_products with (security_invoker = true) as
 select p.store_id, p.id, p.sku, p.name, p.kind, coalesce(c.name,'') as category,
        p.price, p.cost, p.min_stock,
        case when p.kind = 'goods'
             then coalesce((select sum(i.quantity) from inventory_levels i where i.product_id = p.id), 0)
-       end as stock
+       end as stock,
+       p.image_url
 from products p left join product_categories c on c.id = p.category_id
 where p.active;
 

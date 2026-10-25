@@ -5,7 +5,7 @@ import {
   demoAppointments, demoBatches, demoCustomers, demoProducts, demoStaff, demoStats,
 } from "./demo";
 import type {
-  Appointment, BatchRow, Customer, DashboardStats, OrderRow, Product, StaffMember,
+  Appointment, BatchRow, Customer, DashboardStats, OrderRow, Product, ProductDetail, StaffMember,
 } from "./types";
 
 /**
@@ -25,7 +25,7 @@ export async function listProducts(storeId?: string): Promise<Product[]> {
   if (!sid) return [];
   const { data, error } = await getAdminClient()
     .from("v_products")
-    .select("id, sku, name, kind, category, price, cost, stock, min_stock")
+    .select("id, sku, name, kind, category, price, cost, stock, min_stock, image_url")
     .eq("store_id", sid)
     .order("name");
   if (error) throw error;
@@ -33,6 +33,7 @@ export async function listProducts(storeId?: string): Promise<Product[]> {
     id: r.id, sku: r.sku, name: r.name, kind: r.kind, category: r.category,
     price: Number(r.price), cost: Number(r.cost),
     stock: r.stock === null ? null : Number(r.stock), minStock: r.min_stock,
+    imageUrl: r.image_url ?? null,
   })) as Product[];
 }
 
@@ -191,4 +192,47 @@ export async function listExpiring(withinDays: number = env.expiryAlertDays, sto
     id: r.id, sku: r.sku, product: r.product, batchCode: r.batch_code ?? "",
     quantity: Number(r.quantity), expiryDate: String(r.expiry_date), daysLeft: Number(r.days_left),
   }));
+}
+
+type ProductRow = {
+  id: string; sku: string; name: string; kind: Product["kind"]; price: number | string; cost: number | string;
+  min_stock: number; image_url: string | null; active: boolean; package_sessions: number | null;
+  product_categories: { name: string } | { name: string }[] | null;
+};
+
+function toDetail(r: ProductRow): ProductDetail {
+  const c = Array.isArray(r.product_categories) ? r.product_categories[0] : r.product_categories;
+  return {
+    id: r.id, sku: r.sku, name: r.name, kind: r.kind, category: c?.name ?? "",
+    price: Number(r.price), cost: Number(r.cost), stock: null, minStock: r.min_stock,
+    imageUrl: r.image_url, active: r.active, sessions: r.package_sessions,
+  };
+}
+
+const DETAIL_COLUMNS =
+  "id, sku, name, kind, price, cost, min_stock, image_url, active, package_sessions, product_categories(name)";
+
+/** Một sản phẩm (kể cả đã ngừng bán) để xem/sửa. */
+export async function getProduct(id: string, storeId?: string): Promise<ProductDetail | null> {
+  if (!isSupabaseConfigured()) {
+    const p = demoProducts.find((x) => x.id === id);
+    return p ? { ...p, active: true, sessions: null } : null;
+  }
+  const sid = await resolveStore(storeId);
+  if (!sid || !/^[0-9a-f-]{36}$/i.test(id)) return null;
+  const { data, error } = await getAdminClient()
+    .from("products").select(DETAIL_COLUMNS).eq("store_id", sid).eq("id", id).maybeSingle();
+  if (error) throw error;
+  return data ? toDetail(data as unknown as ProductRow) : null;
+}
+
+/** Sản phẩm đã ngừng bán. */
+export async function listInactiveProducts(storeId?: string): Promise<ProductDetail[]> {
+  if (!isSupabaseConfigured()) return [];
+  const sid = await resolveStore(storeId);
+  if (!sid) return [];
+  const { data, error } = await getAdminClient()
+    .from("products").select(DETAIL_COLUMNS).eq("store_id", sid).eq("active", false).order("name");
+  if (error) throw error;
+  return (data ?? []).map((r) => toDetail(r as unknown as ProductRow));
 }
