@@ -55,7 +55,8 @@ Hoặc import repo GitHub vào Vercel (Framework: Next.js) và khai báo biến 
 
 - **Giai đoạn 1 (xong):** khung dự án, schema, RBAC, các màn hình đọc dữ liệu, webhook Telegram, AI Agent chỉ đọc.
 - **Giai đoạn 1.5 (xong):** đăng nhập Supabase, tạo cửa hàng, dữ liệu theo từng cửa hàng, liên kết Telegram theo nhân viên.
-- **Giai đoạn 2:** quản lý nhân viên, POS đầy đủ (giỏ hàng, thanh toán, in hoá đơn), nhập kho/kiểm kho/chuyển kho, công nợ, sổ quỹ.
+- **Giai đoạn 2a (xong):** form thêm sản phẩm/khách hàng/nhân viên, nhập kho và kiểm kho, POS thật (giỏ hàng, thanh toán, trừ kho, tích điểm, lên hạng, sổ quỹ), danh sách đơn hàng.
+- **Giai đoạn 2b:** sửa/xoá dữ liệu, in hoá đơn, thu nợ đơn còn nợ, hoàn/huỷ đơn, chuyển kho, nhà cung cấp và phiếu nhập, cấp tài khoản cho nhân viên.
 - **Giai đoạn 3:** lịch hẹn kéo-thả + nhắc hẹn Telegram, liệu trình, hoa hồng, tích điểm/hạng thành viên.
 - **Giai đoạn 4:** AI Agent có thao tác ghi (có bước xác nhận), báo cáo thông minh, đa chi nhánh, ứng dụng PWA/offline.
 

@@ -46,3 +46,12 @@ export interface DashboardStats {
   lowStockCount: number;
   last7Days: { label: string; revenue: number }[];
 }
+
+export interface OrderRow {
+  id: string;
+  code: string;
+  customer: string;
+  total: number;
+  status: "draft" | "paid" | "partial" | "refunded" | "cancelled";
+  createdAt: string;
+}

@@ -362,3 +362,188 @@ drop policy if exists staff_write on staff;
 create policy staff_write on staff for all to authenticated
   using (store_id = current_store_id() and current_role_name() in ('owner','manager'))
   with check (store_id = current_store_id() and current_role_name() in ('owner','manager'));
+
+
+-- =====================================================================
+-- GIAI ĐOẠN 2: hàm nghiệp vụ (chạy trong 1 giao dịch, an toàn khi chạy lại)
+-- Chỉ server (service_role) được gọi; người dùng đăng nhập không gọi trực tiếp.
+-- =====================================================================
+
+-- Nhập kho / kiểm kho. p_mode: 'in' = cộng thêm, 'set' = đặt đúng số đã đếm.
+create or replace function adjust_stock(
+  p_store uuid, p_branch uuid, p_product uuid, p_qty integer,
+  p_mode text, p_unit_cost numeric default null, p_note text default null,
+  p_staff uuid default null
+) returns integer language plpgsql as $$
+declare
+  v_cur integer;
+  v_delta integer;
+  v_type stock_move_type;
+begin
+  perform pg_advisory_xact_lock(hashtext(p_store::text));
+  if not exists (select 1 from products where id = p_product and store_id = p_store and kind = 'goods') then
+    raise exception 'Chỉ nhập/kiểm kho cho hàng hoá của cửa hàng';
+  end if;
+  if not exists (select 1 from branches where id = p_branch and store_id = p_store) then
+    raise exception 'Chi nhánh không hợp lệ';
+  end if;
+  if p_qty is null or p_qty < 0 then raise exception 'Số lượng không hợp lệ'; end if;
+
+  select quantity into v_cur from inventory_levels where product_id = p_product and branch_id = p_branch;
+  v_cur := coalesce(v_cur, 0);
+
+  if p_mode = 'in' then
+    if p_qty = 0 then raise exception 'Số lượng nhập phải lớn hơn 0'; end if;
+    v_delta := p_qty; v_type := 'purchase';
+  elsif p_mode = 'set' then
+    v_delta := p_qty - v_cur; v_type := 'adjust';
+  else
+    raise exception 'Chế độ không hợp lệ';
+  end if;
+
+  insert into inventory_levels (product_id, branch_id, store_id, quantity)
+  values (p_product, p_branch, p_store, v_cur + v_delta)
+  on conflict (product_id, branch_id) do update set quantity = excluded.quantity;
+
+  if v_delta <> 0 then
+    insert into stock_movements (store_id, branch_id, product_id, type, quantity, unit_cost, note, created_by)
+    values (p_store, p_branch, p_product, v_type, v_delta, p_unit_cost, p_note, p_staff);
+  end if;
+  if p_mode = 'in' and p_unit_cost is not null and p_unit_cost > 0 then
+    update products set cost = p_unit_cost where id = p_product;
+  end if;
+  return v_cur + v_delta;
+end $$;
+
+-- Bán hàng POS: tạo đơn + dòng hàng + thanh toán + trừ kho + sổ quỹ + tích điểm/hạng,
+-- tất cả hoặc không gì cả (lỗi thì hoàn tác toàn bộ).
+-- p_items:    [{"product_id": "...", "quantity": 2, "staff_id": "...|null", "discount": 0}]
+-- p_payments: [{"method": "cash", "amount": 500000}]
+create or replace function create_pos_order(
+  p_store uuid, p_branch uuid, p_cashier uuid, p_customer uuid,
+  p_items jsonb, p_payments jsonb, p_discount numeric default 0, p_note text default null
+) returns jsonb language plpgsql as $$
+declare
+  v_item jsonb; v_pay jsonb; v_prod products%rowtype;
+  v_qty integer; v_line_disc numeric; v_staff uuid;
+  v_subtotal numeric := 0; v_total numeric; v_paid numeric := 0; v_amt numeric;
+  v_order uuid; v_code text; v_seq integer; v_status order_status;
+  v_points integer := 0; v_spent numeric; v_tier customer_tier; v_method payment_method;
+begin
+  perform pg_advisory_xact_lock(hashtext(p_store::text));
+
+  if p_items is null or jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) = 0 then
+    raise exception 'Giỏ hàng trống';
+  end if;
+  if not exists (select 1 from branches where id = p_branch and store_id = p_store) then
+    raise exception 'Chi nhánh không hợp lệ';
+  end if;
+  if p_customer is not null and not exists (select 1 from customers where id = p_customer and store_id = p_store) then
+    raise exception 'Khách hàng không hợp lệ';
+  end if;
+  if coalesce(p_discount, 0) < 0 then raise exception 'Giảm giá không hợp lệ'; end if;
+
+  -- Vòng 1: kiểm tra và tính tạm tính theo GIÁ TRONG DATABASE (không tin giá từ trình duyệt)
+  for v_item in select * from jsonb_array_elements(p_items) loop
+    select * into v_prod from products
+      where id = (v_item->>'product_id')::uuid and store_id = p_store and active;
+    if not found then raise exception 'Sản phẩm không tồn tại hoặc đã ngừng bán'; end if;
+    v_qty := (v_item->>'quantity')::integer;
+    if v_qty is null or v_qty <= 0 then raise exception 'Số lượng không hợp lệ'; end if;
+    v_line_disc := coalesce((v_item->>'discount')::numeric, 0);
+    if v_line_disc < 0 then raise exception 'Giảm giá không hợp lệ'; end if;
+    if v_prod.kind = 'package' and p_customer is null then
+      raise exception 'Bán liệu trình cần chọn khách hàng';
+    end if;
+    v_subtotal := v_subtotal + v_prod.price * v_qty - v_line_disc;
+  end loop;
+
+  v_total := greatest(v_subtotal - coalesce(p_discount, 0), 0);
+
+  -- Mã đơn: HDyymmdd-0001 (đánh số theo ngày, theo cửa hàng)
+  select count(*) + 1 into v_seq from orders
+    where store_id = p_store
+      and (created_at at time zone 'Asia/Ho_Chi_Minh')::date = (now() at time zone 'Asia/Ho_Chi_Minh')::date;
+  v_code := 'HD' || to_char(now() at time zone 'Asia/Ho_Chi_Minh', 'YYMMDD') || '-' || lpad(v_seq::text, 4, '0');
+
+  insert into orders (store_id, branch_id, code, customer_id, cashier_id, status, subtotal, discount, total, note, source)
+  values (p_store, p_branch, v_code, p_customer, p_cashier, 'draft', v_subtotal, coalesce(p_discount, 0), v_total, p_note, 'pos')
+  returning id into v_order;
+
+  -- Vòng 2: ghi dòng hàng, trừ kho, tạo liệu trình
+  for v_item in select * from jsonb_array_elements(p_items) loop
+    select * into v_prod from products where id = (v_item->>'product_id')::uuid;
+    v_qty := (v_item->>'quantity')::integer;
+    v_line_disc := coalesce((v_item->>'discount')::numeric, 0);
+    v_staff := nullif(v_item->>'staff_id', '')::uuid;
+    if v_staff is not null and not exists (select 1 from staff where id = v_staff and store_id = p_store) then
+      raise exception 'Nhân viên thực hiện không hợp lệ';
+    end if;
+
+    insert into order_items (order_id, product_id, staff_id, quantity, unit_price, discount)
+    values (v_order, v_prod.id, v_staff, v_qty, v_prod.price, v_line_disc);
+
+    if v_prod.kind = 'goods' then
+      update inventory_levels set quantity = quantity - v_qty
+        where product_id = v_prod.id and branch_id = p_branch and quantity >= v_qty;
+      if not found then raise exception 'Không đủ tồn kho: %', v_prod.name; end if;
+      insert into stock_movements (store_id, branch_id, product_id, type, quantity, ref_type, ref_id, note, created_by)
+      values (p_store, p_branch, v_prod.id, 'sale', -v_qty, 'order', v_order, v_code, p_cashier);
+    elsif v_prod.kind = 'package' then
+      insert into customer_packages (store_id, customer_id, product_id, sessions_total)
+      select p_store, p_customer, v_prod.id, coalesce(v_prod.package_sessions, 1)
+      from generate_series(1, v_qty);
+    end if;
+  end loop;
+
+  -- Thanh toán (ghi tối đa bằng số còn phải trả; phần thừa là tiền thối)
+  for v_pay in select * from jsonb_array_elements(coalesce(p_payments, '[]'::jsonb)) loop
+    v_method := (v_pay->>'method')::payment_method;
+    v_amt := least(coalesce((v_pay->>'amount')::numeric, 0), v_total - v_paid);
+    if v_amt > 0 then
+      insert into payments (order_id, store_id, method, amount) values (v_order, p_store, v_method, v_amt);
+      if v_method = 'cash' then
+        insert into cash_transactions (store_id, branch_id, amount, reason)
+        values (p_store, p_branch, v_amt, 'Bán hàng ' || v_code);
+      end if;
+      v_paid := v_paid + v_amt;
+    end if;
+  end loop;
+
+  v_status := case when v_paid >= v_total then 'paid' else 'partial' end;
+  update orders set status = v_status where id = v_order;
+
+  -- Tích điểm: 1 điểm / 10.000đ; cập nhật chi tiêu, hạng thành viên
+  if p_customer is not null then
+    v_points := floor(v_total / 10000);
+    update customers set
+      points = points + v_points,
+      total_spent = total_spent + v_total,
+      last_visit_at = (now() at time zone 'Asia/Ho_Chi_Minh')::date
+    where id = p_customer
+    returning total_spent into v_spent;
+    v_tier := case
+      when v_spent >= 30000000 then 'Kim cương'
+      when v_spent >= 15000000 then 'Vàng'
+      when v_spent >= 5000000 then 'Bạc'
+      else 'Thường' end;
+    update customers set tier = v_tier where id = p_customer;
+    if v_points > 0 then
+      insert into loyalty_transactions (store_id, customer_id, points, reason, order_id)
+      values (p_store, p_customer, v_points, 'Mua hàng ' || v_code, v_order);
+    end if;
+  end if;
+
+  return jsonb_build_object('order_id', v_order, 'code', v_code, 'total', v_total,
+                            'paid', v_paid, 'status', v_status, 'points', v_points);
+end $$;
+
+-- Chỉ service_role (server của app) được gọi hai hàm này
+revoke execute on function adjust_stock(uuid, uuid, uuid, integer, text, numeric, text, uuid) from public;
+revoke execute on function create_pos_order(uuid, uuid, uuid, uuid, jsonb, jsonb, numeric, text) from public;
+do $$ begin
+  revoke execute on function adjust_stock(uuid, uuid, uuid, integer, text, numeric, text, uuid) from anon, authenticated;
+  revoke execute on function create_pos_order(uuid, uuid, uuid, uuid, jsonb, jsonb, numeric, text) from anon, authenticated;
+  grant execute on function adjust_stock(uuid, uuid, uuid, integer, text, numeric, text, uuid) to service_role;
+  grant execute on function create_pos_order(uuid, uuid, uuid, uuid, jsonb, jsonb, numeric, text) to service_role;
+exception when undefined_object then null; end $$;

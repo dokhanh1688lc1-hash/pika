@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  BarChart3, Bot, CalendarClock, LayoutDashboard, Package, Settings, ShoppingCart, Sparkles, UserRound, Users, Warehouse,
+  BarChart3, Bot, CalendarClock, LayoutDashboard, Receipt, Package, Settings, ShoppingCart, Sparkles, UserRound, Users, Warehouse,
 } from "lucide-react";
 
 const NAV = [
   { href: "/dashboard", label: "Tổng quan", icon: LayoutDashboard },
   { href: "/pos", label: "Bán hàng (POS)", icon: ShoppingCart },
+  { href: "/orders", label: "Đơn hàng", icon: Receipt },
   { href: "/products", label: "Hàng hoá & dịch vụ", icon: Package },
   { href: "/inventory", label: "Kho", icon: Warehouse },
   { href: "/customers", label: "Khách hàng", icon: Users },

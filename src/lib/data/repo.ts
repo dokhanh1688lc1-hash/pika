@@ -5,7 +5,7 @@ import {
   demoAppointments, demoCustomers, demoProducts, demoStaff, demoStats,
 } from "./demo";
 import type {
-  Appointment, Customer, DashboardStats, Product, StaffMember,
+  Appointment, Customer, DashboardStats, OrderRow, Product, StaffMember,
 } from "./types";
 
 /**
@@ -153,4 +153,24 @@ export async function dashboardStats(storeId?: string): Promise<DashboardStats> 
     lowStockCount: low.length,
     last7Days,
   };
+}
+
+export async function listOrders(storeId?: string): Promise<OrderRow[]> {
+  if (!isSupabaseConfigured()) return [];
+  const sid = await resolveStore(storeId);
+  if (!sid) return [];
+  const { data, error } = await getAdminClient()
+    .from("orders")
+    .select("id, code, total, status, created_at, customers(name)")
+    .eq("store_id", sid)
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (error) throw error;
+  return (data ?? []).map((r) => {
+    const c = Array.isArray(r.customers) ? r.customers[0] : r.customers;
+    return {
+      id: r.id, code: r.code, customer: c?.name ?? "Khách lẻ", total: Number(r.total),
+      status: r.status, createdAt: r.created_at,
+    };
+  }) as OrderRow[];
 }

@@ -46,10 +46,15 @@ Kiểm tra: mở `https://<app>.vercel.app/api/health`, thấy `"database":"conf
 
 Nhân viên khác: họ tạo tài khoản rồi bạn thêm họ vào cửa hàng (màn hình quản lý nhân viên sẽ có ở giai đoạn 2; hiện tại thêm bằng SQL, bảng `staff`, cột `user_id` là id trong Authentication → Users).
 
+## Cập nhật khi có phiên bản mới (quan trọng)
+Mỗi khi `supabase/setup.sql` thay đổi (ví dụ giai đoạn 2 thêm hàm bán hàng và nhập kho), hãy **dán lại toàn bộ file và Run** trong SQL Editor. File chạy lại an toàn, không xoá dữ liệu.
+Nếu bỏ qua bước này, POS và nhập kho sẽ báo lỗi kiểu `Could not find the function public.create_pos_order`.
+
 ## Lỗi thường gặp
 | Hiện tượng | Nguyên nhân |
 |---|---|
 | Vẫn thấy dòng demo | Thiếu một trong 3 biến, hoặc chưa Redeploy |
 | Đăng ký xong không vào được | Đang bật Confirm email: mở email xác nhận trước |
 | "Không tạo được cửa hàng: ..." | Chưa chạy `setup.sql`, hoặc `SUPABASE_SERVICE_ROLE_KEY` sai |
+| "Could not find the function ..." khi bán hàng hoặc nhập kho | Chưa chạy lại `setup.sql` bản mới |
 | Trang trắng / lỗi 500 sau khi cấu hình | Xem Vercel → Logs, gửi lỗi cho người phát triển |

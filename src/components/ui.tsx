@@ -64,3 +64,36 @@ export function RevenueBars({ data }: { data: { label: string; revenue: number }
     </div>
   );
 }
+
+export const inputClass =
+  "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-400";
+
+export function Notice({ error, ok }: { error?: string; ok?: string }) {
+  if (!error && !ok) return null;
+  return (
+    <p
+      className={`mb-4 rounded-xl px-4 py-2 text-sm ${
+        error ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"
+      }`}
+    >
+      {error ?? ok}
+    </p>
+  );
+}
+
+export function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="block text-sm">
+      <span className="mb-1 block text-slate-600">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+export function SubmitButton({ children }: { children: ReactNode }) {
+  return (
+    <button className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">
+      {children}
+    </button>
+  );
+}
