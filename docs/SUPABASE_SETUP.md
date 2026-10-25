@@ -60,6 +60,13 @@ Nhân viên khác: họ tạo tài khoản rồi bạn thêm họ vào cửa hà
 3. Ảnh được nén về tối đa 900px (WEBP) ngay trên trình duyệt, giới hạn 2MB. Kho lưu trữ `product-images` tự tạo ở lần tải đầu tiên (không cần làm gì trong Supabase).
 4. Ảnh hiện ở danh sách sản phẩm và thẻ sản phẩm trong POS.
 
+## Giai đoạn 2b: công nợ, hoàn/huỷ, nhập hàng, chuyển kho
+1. **Chạy lại `supabase/setup.sql`** (thêm view `v_orders`, `v_suppliers` và các hàm `pay_order_debt`, `void_order`, `transfer_stock`, `create_purchase`, `pay_supplier`).
+2. **Đơn hàng → bấm mã đơn**: xem và **in hoá đơn** (khổ hẹp kiểu bill), **thu nợ** từng phần cho đơn còn thiếu tiền, **hoàn tiền / huỷ đơn** (nhập lại kho, trả tiền theo hình thức đã thu, thu hồi điểm). Liệu trình khách đã dùng buổi thì không hoàn được. Lọc "Còn nợ" hoặc bấm ô **Khách còn nợ** ở Tổng quan để xem tổng phải thu.
+3. **Nhà cung cấp** và **Phiếu nhập hàng**: một phiếu nhập nhiều sản phẩm (có hạn dùng / số lô), tự cộng kho; phần chưa trả được ghi vào công nợ nhà cung cấp, trả nợ ở trang Nhà cung cấp. Tiền chi ghi vào sổ quỹ.
+4. **Chuyển kho**: cần ít nhất 2 chi nhánh (chủ cửa hàng thêm ở trang Chuyển kho). Lô cận date chuyển trước và giữ nguyên hạn dùng.
+5. **Xoá nhân viên** (trang Nhân viên): nhân viên chưa có lịch sử thì xoá hẳn; đã có đơn / lịch hẹn thì chuyển sang "ngừng hoạt động" để giữ báo cáo cũ. Không xoá được chủ cửa hàng hoặc chính mình.
+
 ## Cập nhật khi có phiên bản mới (quan trọng)
 Mỗi khi `supabase/setup.sql` thay đổi (ví dụ giai đoạn 2 thêm hàm bán hàng và nhập kho), hãy **dán lại toàn bộ file và Run** trong SQL Editor. File chạy lại an toàn, không xoá dữ liệu.
 Nếu bỏ qua bước này, POS và nhập kho sẽ báo lỗi kiểu `Could not find the function public.create_pos_order`.

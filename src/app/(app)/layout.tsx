@@ -27,9 +27,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex min-h-screen">
       <Sidebar />
-      <main className="min-w-0 flex-1 p-6 md:p-8">
+      <main className="min-w-0 flex-1 p-6 md:p-8 print:p-0">
         {demo && (
-          <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+          <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 print:hidden">
             Đang chạy chế độ demo (chưa cấu hình Supabase) — dữ liệu hiển thị là dữ liệu mẫu.
             Xem hướng dẫn kết nối tại docs/SUPABASE_SETUP.md.
           </div>
@@ -37,7 +37,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {expiring.length > 0 && (
           <Link
             href="/expiry"
-            className={`mb-6 block rounded-xl border px-4 py-2 text-sm ${
+            className={`mb-6 block rounded-xl border px-4 py-2 text-sm print:hidden ${
               expired > 0
                 ? "border-rose-200 bg-rose-50 text-rose-800"
                 : "border-amber-200 bg-amber-50 text-amber-800"
@@ -50,7 +50,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </Link>
         )}
         {member && (
-          <div className="mb-6 flex items-center justify-end gap-3 text-sm">
+          <div className="mb-6 flex items-center justify-end gap-3 text-sm print:hidden">
             <span className="text-slate-600">
               {member.name} · {ROLE_LABEL[member.role]}
             </span>

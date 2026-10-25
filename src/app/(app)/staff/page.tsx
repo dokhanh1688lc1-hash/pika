@@ -1,10 +1,11 @@
+import { RemoveStaffButton } from "@/components/RemoveStaffButton";
 import { Field, Notice, PageHeader, SubmitButton, Table, inputClass } from "@/components/ui";
 import { getMembership } from "@/lib/auth";
 import { listStaff } from "@/lib/data/repo";
 import { isSupabaseConfigured } from "@/lib/env";
 import { vnd } from "@/lib/format";
 import { ROLE_LABEL, can, type Role } from "@/lib/rbac";
-import { createStaff } from "./actions";
+import { createStaff, removeStaff } from "./actions";
 
 export default async function StaffPage({
   searchParams,
@@ -46,7 +47,7 @@ export default async function StaffPage({
         </details>
       )}
 
-      <Table head={["Nhân viên", "Vai trò", "Doanh thu tháng", "% hoa hồng", "Hoa hồng tạm tính"]}>
+      <Table head={["Nhân viên", "Vai trò", "Doanh thu tháng", "% hoa hồng", "Hoa hồng tạm tính", ""]}>
         {staff.map((s) => (
           <tr key={s.id}>
             <td className="td font-medium">{s.name}</td>
@@ -54,10 +55,15 @@ export default async function StaffPage({
             <td className="td">{vnd(s.monthRevenue)}</td>
             <td className="td">{(s.commissionRate * 100).toFixed(0)}%</td>
             <td className="td">{vnd(Math.round(s.monthRevenue * s.commissionRate))}</td>
+            <td className="td text-right">
+              {canEdit && s.role !== "owner" && s.id !== member?.staffId && (s.role !== "manager" || member?.role === "owner") && (
+                <RemoveStaffButton id={s.id} name={s.name} action={removeStaff} />
+              )}
+            </td>
           </tr>
         ))}
         {staff.length === 0 && (
-          <tr><td className="td text-slate-500" colSpan={5}>Chưa có nhân viên nào.</td></tr>
+          <tr><td className="td text-slate-500" colSpan={6}>Chưa có nhân viên nào.</td></tr>
         )}
       </Table>
     </>

@@ -53,7 +53,62 @@ export interface OrderRow {
   code: string;
   customer: string;
   total: number;
-  status: "draft" | "paid" | "partial" | "refunded" | "cancelled";
+  paid: number;
+  due: number;
+  status: OrderStatus;
+  createdAt: string;
+}
+
+export type OrderStatus = "draft" | "paid" | "partial" | "refunded" | "cancelled";
+
+export interface OrderDetail extends OrderRow {
+  customerPhone: string;
+  note: string;
+  subtotal: number;
+  discount: number;
+  closeNote: string;
+  cashier: string;
+  branch: string;
+  store: { name: string; phone: string; address: string };
+  items: { name: string; sku: string; quantity: number; unitPrice: number; discount: number }[];
+  payments: { method: string; amount: number; at: string }[];
+}
+
+export interface Branch {
+  id: string;
+  name: string;
+  isDefault: boolean;
+}
+
+export interface Supplier {
+  id: string;
+  name: string;
+  phone: string;
+  address: string;
+  note: string;
+  debt: number;
+  purchases: number;
+}
+
+export interface PurchaseRow {
+  id: string;
+  code: string;
+  supplier: string;
+  branch: string;
+  total: number;
+  paid: number;
+  note: string;
+  createdAt: string;
+}
+
+export interface TransferRow {
+  id: string;
+  product: string;
+  sku: string;
+  from: string;
+  to: string;
+  quantity: number;
+  note: string;
   createdAt: string;
 }
 

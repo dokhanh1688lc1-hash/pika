@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  BarChart3, Bot, CalendarClock, Hourglass, LayoutDashboard, Receipt, Package, Settings, ShoppingCart, Sparkles, UserRound, Users, Warehouse,
+  BarChart3, Bot, CalendarClock, Hourglass, LayoutDashboard, Receipt, Package, Settings, ShoppingCart, Sparkles, Truck, UserRound, Users, Warehouse, ArrowLeftRight, PackagePlus,
 } from "lucide-react";
 
 const NAV = [
@@ -12,6 +12,9 @@ const NAV = [
   { href: "/orders", label: "Đơn hàng", icon: Receipt },
   { href: "/products", label: "Hàng hoá & dịch vụ", icon: Package },
   { href: "/inventory", label: "Kho", icon: Warehouse },
+  { href: "/purchases", label: "Phiếu nhập hàng", icon: PackagePlus },
+  { href: "/suppliers", label: "Nhà cung cấp", icon: Truck },
+  { href: "/transfers", label: "Chuyển kho", icon: ArrowLeftRight },
   { href: "/expiry", label: "Hạn sử dụng", icon: Hourglass },
   { href: "/customers", label: "Khách hàng", icon: Users },
   { href: "/appointments", label: "Lịch hẹn", icon: CalendarClock },
@@ -24,7 +27,7 @@ const NAV = [
 export function Sidebar() {
   const pathname = usePathname();
   return (
-    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-slate-200 bg-white p-4 md:flex">
+    <aside className="sticky top-0 hidden h-screen print:!hidden w-64 shrink-0 flex-col border-r border-slate-200 bg-white p-4 md:flex">
       <div className="mb-6 flex items-center gap-2 px-2">
         <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand-600 text-white">
           <Sparkles size={18} />

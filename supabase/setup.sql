@@ -314,6 +314,7 @@ select s.store_id, s.id, s.name, s.role::text as role, s.commission_rate,
 from staff s
 left join order_items oi on oi.staff_id = s.id
 left join orders o on o.id = oi.order_id
+where s.active
 group by s.id;
 
 -- ============ RLS ============
@@ -656,4 +657,303 @@ do $$ begin
   grant execute on function dispose_batch(uuid, uuid, uuid, text) to service_role;
   grant execute on function adjust_stock(uuid, uuid, uuid, integer, text, numeric, text, uuid, date, text) to service_role;
   grant execute on function create_pos_order(uuid, uuid, uuid, uuid, jsonb, jsonb, numeric, text) to service_role;
+exception when undefined_object then null; end $$;
+
+
+-- =====================================================================
+-- GIAI ĐOẠN 2b: công nợ, hoàn/huỷ đơn, chuyển kho, nhà cung cấp, phiếu nhập
+-- =====================================================================
+
+alter table orders add column if not exists closed_at timestamptz;
+alter table orders add column if not exists closed_by uuid references staff(id);
+alter table orders add column if not exists close_note text;
+
+alter table suppliers add column if not exists address text;
+alter table suppliers add column if not exists note text;
+alter table suppliers add column if not exists created_at timestamptz not null default now();
+
+alter table purchase_orders add column if not exists note text;
+alter table purchase_orders add column if not exists created_by uuid references staff(id);
+
+-- Đơn hàng kèm số đã thu / còn nợ (tính từ bảng payments; hoàn tiền là khoản âm)
+create or replace view v_orders with (security_invoker = true) as
+select o.store_id, o.id, o.code, o.status, o.total, o.created_at, o.customer_id,
+       coalesce(c.name, 'Khách lẻ') as customer,
+       coalesce((select sum(p.amount) from payments p where p.order_id = o.id), 0) as paid,
+       case when o.status in ('paid','partial')
+            then greatest(o.total - coalesce((select sum(p.amount) from payments p where p.order_id = o.id), 0), 0)
+            else 0 end as due
+from orders o left join customers c on c.id = o.customer_id;
+
+create or replace view v_suppliers with (security_invoker = true) as
+select s.store_id, s.id, s.name, s.phone, s.address, s.note, s.debt,
+       (select count(*) from purchase_orders po where po.supplier_id = s.id) as purchases
+from suppliers s;
+
+-- Thu nợ cho đơn còn thiếu tiền
+create or replace function pay_order_debt(
+  p_store uuid, p_order uuid, p_method text, p_amount numeric, p_staff uuid default null
+) returns jsonb language plpgsql as $$
+declare
+  v_o orders%rowtype; v_paid numeric; v_due numeric; v_method payment_method; v_status order_status;
+begin
+  perform pg_advisory_xact_lock(hashtext(p_store::text));
+  select * into v_o from orders where id = p_order and store_id = p_store for update;
+  if not found then raise exception 'Không tìm thấy đơn hàng'; end if;
+  if v_o.status <> 'partial' then raise exception 'Đơn này không còn nợ'; end if;
+  v_method := p_method::payment_method;
+  if v_method in ('points', 'package') then raise exception 'Hình thức thanh toán không hợp lệ'; end if;
+  select coalesce(sum(amount), 0) into v_paid from payments where order_id = p_order;
+  v_due := v_o.total - v_paid;
+  if p_amount is null or p_amount <= 0 then raise exception 'Số tiền thu phải lớn hơn 0'; end if;
+  if p_amount > v_due then raise exception 'Số tiền vượt quá nợ còn lại (% đ)', v_due; end if;
+
+  insert into payments (order_id, store_id, method, amount) values (p_order, p_store, v_method, p_amount);
+  if v_method = 'cash' then
+    insert into cash_transactions (store_id, branch_id, amount, reason)
+    values (p_store, v_o.branch_id, p_amount, 'Thu nợ ' || v_o.code);
+  end if;
+  v_status := case when p_amount >= v_due then 'paid' else 'partial' end;
+  update orders set status = v_status where id = p_order;
+  return jsonb_build_object('code', v_o.code, 'due', v_due - p_amount, 'status', v_status);
+end $$;
+
+-- Hoàn tiền (p_status='refunded') hoặc huỷ (p_status='cancelled') một đơn:
+-- nhập lại kho, trả tiền khách, thu hồi điểm / chi tiêu, gỡ liệu trình chưa dùng.
+create or replace function void_order(
+  p_store uuid, p_order uuid, p_staff uuid default null,
+  p_status text default 'refunded', p_note text default null
+) returns jsonb language plpgsql as $$
+declare
+  v_o orders%rowtype; v_it record; v_pay record; v_removed integer; v_refund numeric := 0;
+  v_points integer; v_spent numeric; v_tier customer_tier;
+begin
+  perform pg_advisory_xact_lock(hashtext(p_store::text));
+  if p_status not in ('refunded', 'cancelled') then raise exception 'Trạng thái không hợp lệ'; end if;
+  select * into v_o from orders where id = p_order and store_id = p_store for update;
+  if not found then raise exception 'Không tìm thấy đơn hàng'; end if;
+  if v_o.status not in ('paid', 'partial') then raise exception 'Đơn này đã được hoàn/huỷ trước đó'; end if;
+
+  for v_it in
+    select oi.product_id, sum(oi.quantity)::integer as qty, p.kind
+    from order_items oi join products p on p.id = oi.product_id
+    where oi.order_id = p_order group by oi.product_id, p.kind
+  loop
+    if v_it.kind = 'goods' then
+      insert into inventory_levels (product_id, branch_id, store_id, quantity)
+      values (v_it.product_id, v_o.branch_id, p_store, v_it.qty)
+      on conflict (product_id, branch_id) do update set quantity = inventory_levels.quantity + excluded.quantity;
+      insert into stock_movements (store_id, branch_id, product_id, type, quantity, ref_type, ref_id, note, created_by)
+      values (p_store, v_o.branch_id, v_it.product_id, 'return', v_it.qty, 'order', p_order,
+              (case when p_status = 'cancelled' then 'Huỷ đơn ' else 'Hoàn đơn ' end) || v_o.code, p_staff);
+    elsif v_it.kind = 'package' and v_o.customer_id is not null then
+      delete from customer_packages where id in (
+        select id from customer_packages
+        where store_id = p_store and customer_id = v_o.customer_id and product_id = v_it.product_id
+          and sessions_used = 0
+        order by created_at desc limit v_it.qty);
+      get diagnostics v_removed = row_count;
+      if v_removed < v_it.qty then
+        raise exception 'Liệu trình của đơn này đã được sử dụng, không thể hoàn/huỷ';
+      end if;
+    end if;
+  end loop;
+
+  -- Trả lại đúng hình thức khách đã thanh toán
+  for v_pay in
+    select method, sum(amount) as amt from payments where order_id = p_order group by method having sum(amount) > 0
+  loop
+    insert into payments (order_id, store_id, method, amount) values (p_order, p_store, v_pay.method, -v_pay.amt);
+    if v_pay.method = 'cash' then
+      insert into cash_transactions (store_id, branch_id, amount, reason)
+      values (p_store, v_o.branch_id, -v_pay.amt,
+              (case when p_status = 'cancelled' then 'Huỷ đơn ' else 'Hoàn tiền đơn ' end) || v_o.code);
+    end if;
+    v_refund := v_refund + v_pay.amt;
+  end loop;
+
+  if v_o.customer_id is not null then
+    v_points := floor(v_o.total / 10000);
+    update customers set
+      points = greatest(points - v_points, 0),
+      total_spent = greatest(total_spent - v_o.total, 0)
+    where id = v_o.customer_id returning total_spent into v_spent;
+    v_tier := case
+      when v_spent >= 30000000 then 'Kim cương'
+      when v_spent >= 15000000 then 'Vàng'
+      when v_spent >= 5000000 then 'Bạc'
+      else 'Thường' end;
+    update customers set tier = v_tier where id = v_o.customer_id;
+    if v_points > 0 then
+      insert into loyalty_transactions (store_id, customer_id, points, reason, order_id)
+      values (p_store, v_o.customer_id, -v_points, 'Thu hồi điểm đơn ' || v_o.code, p_order);
+    end if;
+  end if;
+
+  update orders set status = p_status::order_status, closed_at = now(), closed_by = p_staff,
+                    close_note = nullif(trim(p_note), '')
+  where id = p_order;
+  return jsonb_build_object('code', v_o.code, 'refunded', v_refund, 'status', p_status);
+end $$;
+
+-- Chuyển hàng giữa hai chi nhánh (lô cận date đi trước, giữ nguyên hạn dùng)
+create or replace function transfer_stock(
+  p_store uuid, p_from uuid, p_to uuid, p_product uuid, p_qty integer,
+  p_staff uuid default null, p_note text default null
+) returns integer language plpgsql as $$
+declare
+  v_expired integer; v_b record; v_left integer; v_take integer;
+  v_today date := (now() at time zone 'Asia/Ho_Chi_Minh')::date;
+begin
+  perform pg_advisory_xact_lock(hashtext(p_store::text));
+  if p_from = p_to then raise exception 'Chi nhánh nguồn và đích phải khác nhau'; end if;
+  if (select count(*) from branches where store_id = p_store and id in (p_from, p_to)) <> 2 then
+    raise exception 'Chi nhánh không hợp lệ';
+  end if;
+  if not exists (select 1 from products where id = p_product and store_id = p_store and kind = 'goods') then
+    raise exception 'Chỉ chuyển kho được hàng hoá của cửa hàng';
+  end if;
+  if p_qty is null or p_qty <= 0 then raise exception 'Số lượng chuyển phải lớn hơn 0'; end if;
+
+  select coalesce(sum(quantity), 0) into v_expired from product_batches
+    where store_id = p_store and branch_id = p_from and product_id = p_product
+      and quantity > 0 and expiry_date < v_today;
+  update inventory_levels set quantity = quantity - p_qty
+    where product_id = p_product and branch_id = p_from and quantity - v_expired >= p_qty;
+  if not found then raise exception 'Không đủ hàng còn hạn ở chi nhánh nguồn'; end if;
+
+  insert into inventory_levels (product_id, branch_id, store_id, quantity)
+  values (p_product, p_to, p_store, p_qty)
+  on conflict (product_id, branch_id) do update set quantity = inventory_levels.quantity + excluded.quantity;
+
+  v_left := p_qty;
+  for v_b in
+    select id, quantity, expiry_date, batch_code from product_batches
+    where store_id = p_store and branch_id = p_from and product_id = p_product
+      and quantity > 0 and expiry_date >= v_today
+    order by expiry_date, received_at for update
+  loop
+    exit when v_left <= 0;
+    v_take := least(v_b.quantity, v_left);
+    update product_batches set quantity = quantity - v_take where id = v_b.id;
+    insert into product_batches (store_id, branch_id, product_id, batch_code, quantity, expiry_date)
+    values (p_store, p_to, p_product, v_b.batch_code, v_take, v_b.expiry_date);
+    v_left := v_left - v_take;
+  end loop;
+
+  insert into stock_movements (store_id, branch_id, product_id, type, quantity, ref_type, note, created_by)
+  values (p_store, p_from, p_product, 'transfer_out', -p_qty, 'transfer', coalesce(p_note, 'Chuyển kho'), p_staff),
+         (p_store, p_to, p_product, 'transfer_in', p_qty, 'transfer', coalesce(p_note, 'Chuyển kho'), p_staff);
+  return p_qty;
+end $$;
+
+-- Phiếu nhập hàng: nhập kho ngay, phần chưa trả ghi vào công nợ nhà cung cấp.
+-- p_items: [{"product_id":"...","quantity":10,"unit_cost":50000,"expiry":"2027-01-31","batch_code":"L01"}]
+create or replace function create_purchase(
+  p_store uuid, p_branch uuid, p_supplier uuid, p_items jsonb, p_paid numeric default 0,
+  p_staff uuid default null, p_note text default null
+) returns jsonb language plpgsql as $$
+declare
+  v_item jsonb; v_qty integer; v_cost numeric; v_total numeric := 0; v_paid numeric;
+  v_po uuid; v_code text; v_seq integer; v_expiry date;
+begin
+  perform pg_advisory_xact_lock(hashtext(p_store::text));
+  if p_items is null or jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) = 0 then
+    raise exception 'Phiếu nhập chưa có sản phẩm';
+  end if;
+  if not exists (select 1 from branches where id = p_branch and store_id = p_store) then
+    raise exception 'Chi nhánh không hợp lệ';
+  end if;
+  if p_supplier is not null and not exists (select 1 from suppliers where id = p_supplier and store_id = p_store) then
+    raise exception 'Nhà cung cấp không hợp lệ';
+  end if;
+
+  for v_item in select * from jsonb_array_elements(p_items) loop
+    v_qty := (v_item->>'quantity')::integer;
+    v_cost := (v_item->>'unit_cost')::numeric;
+    if v_qty is null or v_qty <= 0 then raise exception 'Số lượng nhập không hợp lệ'; end if;
+    if v_cost is null or v_cost < 0 then raise exception 'Giá nhập không hợp lệ'; end if;
+    v_total := v_total + v_qty * v_cost;
+  end loop;
+
+  v_paid := least(greatest(coalesce(p_paid, 0), 0), v_total);
+  if p_supplier is null then v_paid := v_total; end if;   -- không có nhà cung cấp thì không ghi nợ
+
+  select count(*) + 1 into v_seq from purchase_orders
+    where store_id = p_store
+      and (created_at at time zone 'Asia/Ho_Chi_Minh')::date = (now() at time zone 'Asia/Ho_Chi_Minh')::date;
+  v_code := 'PN' || to_char(now() at time zone 'Asia/Ho_Chi_Minh', 'YYMMDD') || '-' || lpad(v_seq::text, 3, '0');
+
+  insert into purchase_orders (store_id, branch_id, supplier_id, code, total, paid, note, created_by)
+  values (p_store, p_branch, p_supplier, v_code, v_total, v_paid, nullif(trim(p_note), ''), p_staff)
+  returning id into v_po;
+
+  for v_item in select * from jsonb_array_elements(p_items) loop
+    v_qty := (v_item->>'quantity')::integer;
+    v_cost := (v_item->>'unit_cost')::numeric;
+    v_expiry := nullif(v_item->>'expiry', '')::date;
+    insert into purchase_order_items (purchase_order_id, product_id, quantity, unit_cost)
+    values (v_po, (v_item->>'product_id')::uuid, v_qty, v_cost);
+    perform adjust_stock(p_store, p_branch, (v_item->>'product_id')::uuid, v_qty, 'in', v_cost,
+                         'Phiếu nhập ' || v_code, p_staff, v_expiry, v_item->>'batch_code');
+  end loop;
+
+  if p_supplier is not null and v_total - v_paid > 0 then
+    update suppliers set debt = debt + (v_total - v_paid) where id = p_supplier;
+  end if;
+  if v_paid > 0 then
+    insert into cash_transactions (store_id, branch_id, amount, reason)
+    values (p_store, p_branch, -v_paid, 'Nhập hàng ' || v_code);
+  end if;
+  return jsonb_build_object('purchase_id', v_po, 'code', v_code, 'total', v_total,
+                            'paid', v_paid, 'debt', v_total - v_paid);
+end $$;
+
+-- Trả nợ nhà cung cấp (phân bổ vào các phiếu nhập cũ nhất trước)
+create or replace function pay_supplier(
+  p_store uuid, p_supplier uuid, p_amount numeric, p_staff uuid default null
+) returns numeric language plpgsql as $$
+declare
+  v_debt numeric; v_left numeric; v_po record; v_pay numeric;
+begin
+  perform pg_advisory_xact_lock(hashtext(p_store::text));
+  select debt into v_debt from suppliers where id = p_supplier and store_id = p_store for update;
+  if not found then raise exception 'Không tìm thấy nhà cung cấp'; end if;
+  if p_amount is null or p_amount <= 0 then raise exception 'Số tiền trả phải lớn hơn 0'; end if;
+  if p_amount > v_debt then raise exception 'Số tiền vượt quá công nợ (% đ)', v_debt; end if;
+
+  update suppliers set debt = debt - p_amount where id = p_supplier;
+  v_left := p_amount;
+  for v_po in
+    select id, total, paid from purchase_orders
+    where store_id = p_store and supplier_id = p_supplier and paid < total
+    order by created_at for update
+  loop
+    exit when v_left <= 0;
+    v_pay := least(v_po.total - v_po.paid, v_left);
+    update purchase_orders set paid = paid + v_pay where id = v_po.id;
+    v_left := v_left - v_pay;
+  end loop;
+  insert into cash_transactions (store_id, amount, reason)
+  values (p_store, -p_amount, 'Trả nợ nhà cung cấp');
+  return v_debt - p_amount;
+end $$;
+
+-- Chỉ service_role (server của app) được gọi
+revoke execute on function pay_order_debt(uuid, uuid, text, numeric, uuid) from public;
+revoke execute on function void_order(uuid, uuid, uuid, text, text) from public;
+revoke execute on function transfer_stock(uuid, uuid, uuid, uuid, integer, uuid, text) from public;
+revoke execute on function create_purchase(uuid, uuid, uuid, jsonb, numeric, uuid, text) from public;
+revoke execute on function pay_supplier(uuid, uuid, numeric, uuid) from public;
+do $$ begin
+  revoke execute on function pay_order_debt(uuid, uuid, text, numeric, uuid) from anon, authenticated;
+  revoke execute on function void_order(uuid, uuid, uuid, text, text) from anon, authenticated;
+  revoke execute on function transfer_stock(uuid, uuid, uuid, uuid, integer, uuid, text) from anon, authenticated;
+  revoke execute on function create_purchase(uuid, uuid, uuid, jsonb, numeric, uuid, text) from anon, authenticated;
+  revoke execute on function pay_supplier(uuid, uuid, numeric, uuid) from anon, authenticated;
+  grant execute on function pay_order_debt(uuid, uuid, text, numeric, uuid) to service_role;
+  grant execute on function void_order(uuid, uuid, uuid, text, text) to service_role;
+  grant execute on function transfer_stock(uuid, uuid, uuid, uuid, integer, uuid, text) to service_role;
+  grant execute on function create_purchase(uuid, uuid, uuid, jsonb, numeric, uuid, text) to service_role;
+  grant execute on function pay_supplier(uuid, uuid, numeric, uuid) to service_role;
 exception when undefined_object then null; end $$;

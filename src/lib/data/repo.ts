@@ -5,7 +5,8 @@ import {
   demoAppointments, demoBatches, demoCustomers, demoProducts, demoStaff, demoStats,
 } from "./demo";
 import type {
-  Appointment, BatchRow, Customer, DashboardStats, OrderRow, Product, ProductDetail, StaffMember,
+  Appointment, BatchRow, Branch, Customer, DashboardStats, OrderDetail, OrderRow, Product, ProductDetail,
+  PurchaseRow, StaffMember, Supplier, TransferRow,
 } from "./types";
 
 /**
@@ -156,24 +157,151 @@ export async function dashboardStats(storeId?: string): Promise<DashboardStats> 
   };
 }
 
-export async function listOrders(storeId?: string): Promise<OrderRow[]> {
+export async function listOrders(storeId?: string, onlyDebt = false): Promise<OrderRow[]> {
+  if (!isSupabaseConfigured()) return [];
+  const sid = await resolveStore(storeId);
+  if (!sid) return [];
+  let q = getAdminClient()
+    .from("v_orders")
+    .select("id, code, customer, total, paid, due, status, created_at")
+    .eq("store_id", sid);
+  if (onlyDebt) q = q.eq("status", "partial");
+  const { data, error } = await q.order("created_at", { ascending: false }).limit(100);
+  if (error) throw error;
+  return (data ?? []).map((r) => ({
+    id: r.id, code: r.code, customer: r.customer, total: Number(r.total),
+    paid: Number(r.paid), due: Number(r.due), status: r.status, createdAt: r.created_at,
+  })) as OrderRow[];
+}
+
+/** Tổng công nợ khách hàng (các đơn còn thiếu tiền). */
+export async function totalReceivable(storeId?: string): Promise<{ count: number; amount: number }> {
+  const rows = await listOrders(storeId, true);
+  return { count: rows.length, amount: rows.reduce((a, r) => a + r.due, 0) };
+}
+
+const UUID_RE = /^[0-9a-f-]{36}$/i;
+
+function one<T>(v: T | T[] | null | undefined): T | null {
+  return Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
+}
+
+export async function getOrder(id: string, storeId?: string): Promise<OrderDetail | null> {
+  if (!isSupabaseConfigured() || !UUID_RE.test(id)) return null;
+  const sid = await resolveStore(storeId);
+  if (!sid) return null;
+  const db = getAdminClient();
+  const { data: o, error } = await db
+    .from("orders")
+    .select(
+      "id, code, status, subtotal, discount, total, note, close_note, created_at, " +
+        "customers(name, phone), cashier:staff!orders_cashier_id_fkey(name), branches(name)",
+    )
+    .eq("store_id", sid).eq("id", id).maybeSingle();
+  if (error) throw error;
+  if (!o) return null;
+  const row = o as unknown as Record<string, any>;
+
+  const [{ data: items }, { data: pays }, { data: store }] = await Promise.all([
+    db.from("order_items")
+      .select("quantity, unit_price, discount, products(name, sku)")
+      .eq("order_id", id).order("id"),
+    db.from("payments").select("method, amount, created_at").eq("order_id", id).order("created_at"),
+    db.from("stores").select("name, phone, address").eq("id", sid).maybeSingle(),
+  ]);
+  const payments = (pays ?? []).map((p) => ({ method: p.method as string, amount: Number(p.amount), at: p.created_at as string }));
+  const paid = payments.reduce((a, p) => a + p.amount, 0);
+  const total = Number(row.total);
+  const customer = one<{ name: string; phone: string | null }>(row.customers);
+  return {
+    id: row.id, code: row.code, status: row.status, total, paid,
+    due: row.status === "partial" ? Math.max(total - paid, 0) : 0,
+    createdAt: row.created_at, customer: customer?.name ?? "Khách lẻ",
+    customerPhone: customer?.phone ?? "", note: row.note ?? "", closeNote: row.close_note ?? "",
+    subtotal: Number(row.subtotal), discount: Number(row.discount),
+    cashier: one<{ name: string }>(row.cashier)?.name ?? "", branch: one<{ name: string }>(row.branches)?.name ?? "",
+    store: { name: store?.name ?? "", phone: store?.phone ?? "", address: store?.address ?? "" },
+    items: (items ?? []).map((it) => {
+      const p = one<{ name: string; sku: string }>(it.products as never);
+      return {
+        name: p?.name ?? "", sku: p?.sku ?? "", quantity: it.quantity,
+        unitPrice: Number(it.unit_price), discount: Number(it.discount),
+      };
+    }),
+    payments,
+  };
+}
+
+export async function listBranches(storeId?: string): Promise<Branch[]> {
   if (!isSupabaseConfigured()) return [];
   const sid = await resolveStore(storeId);
   if (!sid) return [];
   const { data, error } = await getAdminClient()
-    .from("orders")
-    .select("id, code, total, status, created_at, customers(name)")
-    .eq("store_id", sid)
-    .order("created_at", { ascending: false })
-    .limit(100);
+    .from("branches").select("id, name, is_default").eq("store_id", sid)
+    .order("is_default", { ascending: false }).order("name");
   if (error) throw error;
-  return (data ?? []).map((r) => {
-    const c = Array.isArray(r.customers) ? r.customers[0] : r.customers;
+  return (data ?? []).map((b) => ({ id: b.id, name: b.name, isDefault: b.is_default }));
+}
+
+export async function listSuppliers(storeId?: string): Promise<Supplier[]> {
+  if (!isSupabaseConfigured()) return [];
+  const sid = await resolveStore(storeId);
+  if (!sid) return [];
+  const { data, error } = await getAdminClient()
+    .from("v_suppliers").select("id, name, phone, address, note, debt, purchases")
+    .eq("store_id", sid).order("name");
+  if (error) throw error;
+  return (data ?? []).map((r) => ({
+    id: r.id, name: r.name, phone: r.phone ?? "", address: r.address ?? "", note: r.note ?? "",
+    debt: Number(r.debt), purchases: Number(r.purchases),
+  }));
+}
+
+export async function listPurchases(storeId?: string): Promise<PurchaseRow[]> {
+  if (!isSupabaseConfigured()) return [];
+  const sid = await resolveStore(storeId);
+  if (!sid) return [];
+  const { data, error } = await getAdminClient()
+    .from("purchase_orders")
+    .select("id, code, total, paid, note, created_at, suppliers(name), branches(name)")
+    .eq("store_id", sid).order("created_at", { ascending: false }).limit(100);
+  if (error) throw error;
+  return (data ?? []).map((r) => ({
+    id: r.id, code: r.code, total: Number(r.total), paid: Number(r.paid), note: r.note ?? "",
+    createdAt: r.created_at,
+    supplier: one<{ name: string }>(r.suppliers as never)?.name ?? "—",
+    branch: one<{ name: string }>(r.branches as never)?.name ?? "",
+  }));
+}
+
+/** Lịch sử chuyển kho (mỗi lần chuyển = một dòng xuất + một dòng nhập; lấy dòng xuất). */
+export async function listTransfers(storeId?: string): Promise<TransferRow[]> {
+  if (!isSupabaseConfigured()) return [];
+  const sid = await resolveStore(storeId);
+  if (!sid) return [];
+  const db = getAdminClient();
+  const { data, error } = await db
+    .from("stock_movements")
+    .select("id, quantity, note, created_at, product_id, branch_id, products(name, sku), branches(name)")
+    .eq("store_id", sid).eq("type", "transfer_out")
+    .order("created_at", { ascending: false }).limit(50);
+  if (error) throw error;
+  const outs = data ?? [];
+  if (outs.length === 0) return [];
+  const { data: ins } = await db
+    .from("stock_movements").select("product_id, created_at, branches(name)")
+    .eq("store_id", sid).eq("type", "transfer_in")
+    .in("created_at", outs.map((o) => o.created_at));
+  return outs.map((o) => {
+    const dest = (ins ?? []).find((i) => i.product_id === o.product_id && i.created_at === o.created_at);
+    const p = one<{ name: string; sku: string }>(o.products as never);
     return {
-      id: r.id, code: r.code, customer: c?.name ?? "Khách lẻ", total: Number(r.total),
-      status: r.status, createdAt: r.created_at,
+      id: o.id, product: p?.name ?? "", sku: p?.sku ?? "",
+      from: one<{ name: string }>(o.branches as never)?.name ?? "",
+      to: dest ? (one<{ name: string }>(dest.branches as never)?.name ?? "") : "",
+      quantity: Math.abs(o.quantity), note: o.note ?? "", createdAt: o.created_at,
     };
-  }) as OrderRow[];
+  });
 }
 
 /** Các lô còn hàng, đã hết hạn hoặc sẽ hết hạn trong `withinDays` ngày tới (gần hết hạn nhất trước). */

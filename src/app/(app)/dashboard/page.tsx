@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Badge, PageHeader, RevenueBars, StatCard, Table } from "@/components/ui";
-import { dashboardStats, listExpiring, listTodayAppointments, lowStockProducts } from "@/lib/data/repo";
+import { dashboardStats, listExpiring, listTodayAppointments, lowStockProducts, totalReceivable } from "@/lib/data/repo";
 import { EXPIRY_LABEL, EXPIRY_TONE, daysText, expiryLevel, fmtDate } from "@/lib/expiry";
 import { num, vnd } from "@/lib/format";
 
@@ -12,18 +12,21 @@ const STATUS = {
 } as const;
 
 export default async function DashboardPage() {
-  const [stats, appts, low, expiring] = await Promise.all([
-    dashboardStats(), listTodayAppointments(), lowStockProducts(), listExpiring(),
+  const [stats, appts, low, expiring, debt] = await Promise.all([
+    dashboardStats(), listTodayAppointments(), lowStockProducts(), listExpiring(), totalReceivable(),
   ]);
   const expiredCount = expiring.filter((b) => b.daysLeft < 0).length;
   return (
     <>
       <PageHeader title="Tổng quan" subtitle="Hoạt động kinh doanh hôm nay" />
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
         <StatCard label="Doanh thu hôm nay" value={vnd(stats.todayRevenue)} />
         <StatCard label="Số đơn hàng" value={num(stats.todayOrders)} />
         <StatCard label="Khách mới" value={num(stats.newCustomers)} />
         <StatCard label="Sắp hết hàng" value={num(stats.lowStockCount)} hint="Cần nhập thêm" />
+        <Link href="/orders?filter=debt" className="block">
+          <StatCard label="Khách còn nợ" value={vnd(debt.amount)} hint={`${debt.count} đơn chưa thu đủ`} />
+        </Link>
         <StatCard
           label="Hạn sử dụng"
           value={num(expiring.length)}
