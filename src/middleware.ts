@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import type { CookieToSet } from "@/lib/supabase/cookies";
 
 // Các đường dẫn không cần đăng nhập (webhook Telegram tự xác thực bằng secret riêng)
 const PUBLIC_PATHS = ["/login", "/api/health", "/api/telegram"];
@@ -14,7 +15,7 @@ export async function middleware(req: NextRequest) {
   const supabase = createServerClient(url, anon, {
     cookies: {
       getAll: () => req.cookies.getAll(),
-      setAll: (list) => {
+      setAll: (list: CookieToSet[]) => {
         list.forEach(({ name, value }) => req.cookies.set(name, value));
         res = NextResponse.next({ request: req });
         list.forEach(({ name, value, options }) => res.cookies.set(name, value, options));
