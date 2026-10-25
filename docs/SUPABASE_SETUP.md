@@ -8,9 +8,10 @@ Sau khi làm đủ các bước dưới, dòng cảnh báo "chế độ demo" bi
 
 ## 2. Tạo bảng dữ liệu
 1. Trong Supabase mở **SQL Editor → New query**.
-2. Dán toàn bộ nội dung file `supabase/migrations/0001_init.sql` → **Run**.
-3. Thấy `Success. No rows returned` là xong. Chạy **một lần duy nhất**; chạy lại sẽ báo "already exists".
-4. (Không bắt buộc) `supabase/seed.sql` chỉ dùng cho môi trường thử nghiệm. Bạn không cần chạy vì cửa hàng được tạo ngay khi đăng ký.
+2. Dán toàn bộ nội dung file `supabase/setup.sql` → **Run**.
+3. Thấy `Success. No rows returned` là xong. File này **chạy lại bao nhiêu lần cũng được** (bỏ qua phần đã có), nên nếu lần trước bị lỗi giữa chừng, cứ chạy lại.
+4. Kiểm tra: Table Editor phải có 21 bảng.
+5. (Không bắt buộc) `supabase/seed.sql` chỉ dùng cho môi trường thử nghiệm. Bạn không cần chạy vì cửa hàng được tạo ngay khi đăng ký.
 
 ## 3. Cấu hình đăng nhập
 Vào **Authentication → Providers → Email**:
@@ -50,5 +51,5 @@ Nhân viên khác: họ tạo tài khoản rồi bạn thêm họ vào cửa hà
 |---|---|
 | Vẫn thấy dòng demo | Thiếu một trong 3 biến, hoặc chưa Redeploy |
 | Đăng ký xong không vào được | Đang bật Confirm email: mở email xác nhận trước |
-| "Không tạo được cửa hàng: ..." | Chưa chạy `0001_init.sql`, hoặc `SUPABASE_SERVICE_ROLE_KEY` sai |
+| "Không tạo được cửa hàng: ..." | Chưa chạy `setup.sql`, hoặc `SUPABASE_SERVICE_ROLE_KEY` sai |
 | Trang trắng / lỗi 500 sau khi cấu hình | Xem Vercel → Logs, gửi lỗi cho người phát triển |

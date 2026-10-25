@@ -28,7 +28,7 @@ Chưa cấu hình Supabase thì app tự chạy **chế độ demo** với dữ 
 Hướng dẫn từng bước (có hình thức cho người mới): [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md). Tóm tắt:
 
 1. Tạo project Supabase.
-2. Chạy `supabase/migrations/0001_init.sql` trong SQL Editor (hoặc `supabase db push`).
+2. Chạy `supabase/setup.sql` trong SQL Editor (chạy lại nhiều lần vẫn an toàn). Dùng Supabase CLI thì dùng `supabase/migrations/0001_init.sql`.
 3. Điền `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, deploy lại, rồi đăng ký tài khoản đầu tiên (app tự dẫn tới bước tạo cửa hàng).
 
 ## Telegram Bot
