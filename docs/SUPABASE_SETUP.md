@@ -90,7 +90,7 @@ Nhân viên khác: họ tạo tài khoản rồi bạn thêm họ vào cửa hà
 ## Trợ lý AI miễn phí (Google Gemini)
 1. Vào https://aistudio.google.com/apikey, đăng nhập Gmail → **Create API key** (gói miễn phí, không cần thẻ; có giới hạn số lượt mỗi phút / ngày do Google quy định).
 2. Trên Vercel thêm biến `GEMINI_API_KEY` = khoá vừa tạo → Redeploy (bỏ tích build cache).
-3. Không cần `ANTHROPIC_API_KEY`. Có cả hai khoá thì app ưu tiên Anthropic. Tuỳ chọn: `GEMINI_MODEL` để đổi model (mặc định `gemini-2.5-flash`).
+3. Không cần `ANTHROPIC_API_KEY`. Có cả hai khoá thì app ưu tiên Anthropic. Model được app tự dò (chọn bản flash ổn định mới nhất đang hoạt động). Tuỳ chọn: đặt `GEMINI_MODEL` để ép dùng một model cụ thể.
 4. Kiểm tra `/api/health` thấy `"ai":"configured (gemini)"`, rồi hỏi thử ở trang Trợ lý AI hoặc qua bot Telegram.
 
 ## Cập nhật khi có phiên bản mới (quan trọng)

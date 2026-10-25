@@ -13,7 +13,8 @@ export const env = {
   aiModel: process.env.AI_MODEL ?? "claude-sonnet-5-5",
   // Phương án miễn phí: Google Gemini (khoá lấy ở https://aistudio.google.com/apikey)
   geminiKey: process.env.GEMINI_API_KEY ?? "",
-  geminiModel: process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
+  // Để trống = tự dò model Gemini (flash) còn hoạt động
+  geminiModel: process.env.GEMINI_MODEL ?? "",
   cronSecret: process.env.CRON_SECRET ?? "",
   expiryAlertDays: Math.max(1, Number(process.env.EXPIRY_ALERT_DAYS) || 30),
 };
