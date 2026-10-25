@@ -72,22 +72,25 @@ export async function removeStaff(form: FormData) {
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Quản lý chỉ thao tác được tài khoản không phải quản lý/chủ; chủ thao tác được tất cả (trừ chính chủ). */
-async function loadTarget(storeId: string, id: string, actorRole: string) {
-  if (!UUID.test(id)) return { error: "Nhân viên không hợp lệ." } as const;
+interface StaffRow { id: string; name: string; role: string; user_id: string | null; active: boolean }
+type Target = { error: string; staff?: undefined } | { error?: undefined; staff: StaffRow };
+
+async function loadTarget(storeId: string, id: string, actorRole: string): Promise<Target> {
+  if (!UUID.test(id)) return { error: "Nhân viên không hợp lệ." };
   const { data } = await getAdminClient()
     .from("staff").select("id, name, role, user_id, active").eq("id", id).eq("store_id", storeId).maybeSingle();
-  if (!data) return { error: "Không tìm thấy nhân viên." } as const;
-  if (data.role === "owner") return { error: "Không thao tác được tài khoản chủ cửa hàng." } as const;
-  if (data.role === "manager" && actorRole !== "owner") return { error: "Chỉ chủ cửa hàng mới quản lý tài khoản của quản lý." } as const;
-  if (!data.active) return { error: "Nhân viên này đã ngừng hoạt động." } as const;
-  return { staff: data } as const;
+  if (!data) return { error: "Không tìm thấy nhân viên." };
+  if (data.role === "owner") return { error: "Không thao tác được tài khoản chủ cửa hàng." };
+  if (data.role === "manager" && actorRole !== "owner") return { error: "Chỉ chủ cửa hàng mới quản lý tài khoản của quản lý." };
+  if (!data.active) return { error: "Nhân viên này đã ngừng hoạt động." };
+  return { staff: data };
 }
 
 /** Cấp tài khoản đăng nhập (email + mật khẩu) cho nhân viên. */
 export async function createStaffAccount(form: FormData) {
   const m = await requireMember("staff.manage", BACK);
   const t = await loadTarget(m.storeId, toText(form.get("id")), m.role);
-  if ("error" in t) return redirectMsg(BACK, "error", t.error);
+  if (t.error !== undefined) return redirectMsg(BACK, "error", t.error);
   if (t.staff.user_id) return redirectMsg(BACK, "error", "Nhân viên này đã có tài khoản.");
 
   const email = toText(form.get("email")).toLowerCase();
@@ -113,7 +116,7 @@ export async function createStaffAccount(form: FormData) {
 export async function resetStaffPassword(form: FormData) {
   const m = await requireMember("staff.manage", BACK);
   const t = await loadTarget(m.storeId, toText(form.get("id")), m.role);
-  if ("error" in t) return redirectMsg(BACK, "error", t.error);
+  if (t.error !== undefined) return redirectMsg(BACK, "error", t.error);
   if (!t.staff.user_id) return redirectMsg(BACK, "error", "Nhân viên này chưa có tài khoản.");
   const password = String(form.get("password") ?? "");
   if (password.length < 8) return redirectMsg(BACK, "error", "Mật khẩu cần từ 8 ký tự.");
@@ -126,7 +129,7 @@ export async function resetStaffPassword(form: FormData) {
 export async function revokeStaffAccount(form: FormData) {
   const m = await requireMember("staff.manage", BACK);
   const t = await loadTarget(m.storeId, toText(form.get("id")), m.role);
-  if ("error" in t) return redirectMsg(BACK, "error", t.error);
+  if (t.error !== undefined) return redirectMsg(BACK, "error", t.error);
   if (!t.staff.user_id) return redirectMsg(BACK, "error", "Nhân viên này chưa có tài khoản.");
   const db = getAdminClient();
   await db.from("staff").update({ user_id: null }).eq("id", t.staff.id).eq("store_id", m.storeId);
