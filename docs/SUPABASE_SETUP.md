@@ -1,0 +1,54 @@
+# Kết nối Supabase (tắt chế độ demo)
+
+Sau khi làm đủ các bước dưới, dòng cảnh báo "chế độ demo" biến mất, ứng dụng yêu cầu đăng nhập và mọi dữ liệu thuộc cửa hàng của bạn.
+
+## 1. Tạo project Supabase
+1. Vào https://supabase.com → **New project**. Chọn region gần Việt Nam (Singapore), đặt mật khẩu database và lưu lại.
+2. Đợi project khởi tạo xong (1–2 phút).
+
+## 2. Tạo bảng dữ liệu
+1. Trong Supabase mở **SQL Editor → New query**.
+2. Dán toàn bộ nội dung file `supabase/migrations/0001_init.sql` → **Run**.
+3. Thấy `Success. No rows returned` là xong. Chạy **một lần duy nhất**; chạy lại sẽ báo "already exists".
+4. (Không bắt buộc) `supabase/seed.sql` chỉ dùng cho môi trường thử nghiệm. Bạn không cần chạy vì cửa hàng được tạo ngay khi đăng ký.
+
+## 3. Cấu hình đăng nhập
+Vào **Authentication → Providers → Email**:
+- Để thử nhanh: tắt **Confirm email** (đăng ký xong dùng được ngay).
+- Dùng thật: bật Confirm email, và vào **Authentication → URL Configuration** đặt *Site URL* = địa chỉ app Vercel của bạn.
+
+## 4. Lấy khoá
+Vào **Project Settings → API** (hoặc API Keys) và lấy 3 giá trị:
+
+| Biến môi trường (Key trên Vercel) | Lấy ở đâu |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Project URL, dạng `https://xxxx.supabase.co` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | khoá `anon` / `public` (hoặc *publishable key*) |
+| `SUPABASE_SERVICE_ROLE_KEY` | khoá `service_role` / *secret key* — **tuyệt đối bí mật** |
+
+`SUPABASE_SERVICE_ROLE_KEY` bỏ qua mọi phân quyền. Không đưa lên GitHub, không gửi cho ai, không đặt tên bắt đầu bằng `NEXT_PUBLIC_`.
+
+## 5. Khai báo trên Vercel
+Project → **Settings → Environment Variables** → thêm 3 biến ở trên (chọn Production, Preview, Development) → **Deployments → Redeploy**.
+
+Kiểm tra: mở `https://<app>.vercel.app/api/health`, thấy `"database":"configured"`.
+
+## 6. Tạo tài khoản và cửa hàng
+1. Mở app → tự chuyển tới `/login` → **Tạo tài khoản mới** (email + mật khẩu từ 8 ký tự).
+2. Màn hình **Thiết lập cửa hàng**: nhập tên cửa hàng và tên bạn → bạn trở thành *Chủ cửa hàng*.
+3. Vào được `/dashboard`. Dữ liệu ban đầu trống (đúng, vì đây là dữ liệu thật của bạn).
+
+## 7. Liên kết Telegram với tài khoản
+1. Vào **Cài đặt → Liên kết Telegram → Tạo mã liên kết**.
+2. Nhắn cho bot: `/start <mã>`. Bot báo "Liên kết thành công".
+3. Từ giờ bot nhận ra bạn là chủ cửa hàng, dùng đúng dữ liệu và quyền của bạn. Không cần `TELEGRAM_ALLOWED_CHAT_IDS` nữa.
+
+Nhân viên khác: họ tạo tài khoản rồi bạn thêm họ vào cửa hàng (màn hình quản lý nhân viên sẽ có ở giai đoạn 2; hiện tại thêm bằng SQL, bảng `staff`, cột `user_id` là id trong Authentication → Users).
+
+## Lỗi thường gặp
+| Hiện tượng | Nguyên nhân |
+|---|---|
+| Vẫn thấy dòng demo | Thiếu một trong 3 biến, hoặc chưa Redeploy |
+| Đăng ký xong không vào được | Đang bật Confirm email: mở email xác nhận trước |
+| "Không tạo được cửa hàng: ..." | Chưa chạy `0001_init.sql`, hoặc `SUPABASE_SERVICE_ROLE_KEY` sai |
+| Trang trắng / lỗi 500 sau khi cấu hình | Xem Vercel → Logs, gửi lỗi cho người phát triển |

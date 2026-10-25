@@ -25,10 +25,11 @@ Chưa cấu hình Supabase thì app tự chạy **chế độ demo** với dữ 
 
 ## Thiết lập CSDL
 
+Hướng dẫn từng bước (có hình thức cho người mới): [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md). Tóm tắt:
+
 1. Tạo project Supabase.
 2. Chạy `supabase/migrations/0001_init.sql` trong SQL Editor (hoặc `supabase db push`).
-3. (Tuỳ chọn) chạy `supabase/seed.sql`, rồi đặt `DEFAULT_STORE_ID=00000000-0000-0000-0000-000000000001`.
-4. Điền `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
+3. Điền `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, deploy lại, rồi đăng ký tài khoản đầu tiên (app tự dẫn tới bước tạo cửa hàng).
 
 ## Telegram Bot
 
@@ -37,7 +38,7 @@ Chưa cấu hình Supabase thì app tự chạy **chế độ demo** với dữ 
 3. Sau khi deploy: `APP_URL=https://<app>.vercel.app npm run telegram:webhook`.
 4. Lệnh: `/doanhthu`, `/tonkho`, `/help`, hoặc nhắn tự nhiên để hỏi AI Agent.
 
-Chỉ chat đã liên kết (`telegram_links`) hoặc nằm trong `TELEGRAM_ALLOWED_CHAT_IDS` mới dùng được bot.
+Có database: vào Cài đặt → Tạo mã liên kết → nhắn bot `/start <mã>`; bot dùng đúng cửa hàng và quyền của nhân viên. Chưa có database: thêm chat id vào `TELEGRAM_ALLOWED_CHAT_IDS`.
 
 ## Deploy lên Vercel
 
@@ -52,8 +53,9 @@ Hoặc import repo GitHub vào Vercel (Framework: Next.js) và khai báo biến 
 
 ## Lộ trình
 
-- **Giai đoạn 1 (hiện tại):** khung dự án, schema, RBAC, các màn hình đọc dữ liệu, webhook Telegram, AI Agent chỉ đọc.
-- **Giai đoạn 2:** đăng nhập Supabase + middleware, POS đầy đủ (giỏ hàng, thanh toán, in hoá đơn), nhập kho/kiểm kho/chuyển kho, công nợ, sổ quỹ.
+- **Giai đoạn 1 (xong):** khung dự án, schema, RBAC, các màn hình đọc dữ liệu, webhook Telegram, AI Agent chỉ đọc.
+- **Giai đoạn 1.5 (xong):** đăng nhập Supabase, tạo cửa hàng, dữ liệu theo từng cửa hàng, liên kết Telegram theo nhân viên.
+- **Giai đoạn 2:** quản lý nhân viên, POS đầy đủ (giỏ hàng, thanh toán, in hoá đơn), nhập kho/kiểm kho/chuyển kho, công nợ, sổ quỹ.
 - **Giai đoạn 3:** lịch hẹn kéo-thả + nhắc hẹn Telegram, liệu trình, hoa hồng, tích điểm/hạng thành viên.
 - **Giai đoạn 4:** AI Agent có thao tác ghi (có bước xác nhận), báo cáo thông minh, đa chi nhánh, ứng dụng PWA/offline.
 

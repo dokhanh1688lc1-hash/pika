@@ -35,7 +35,7 @@ Cả ba kênh dùng chung một lớp truy cập dữ liệu (`repo.ts`), nên s
 
 ## Việc cần làm trước khi chạy production
 
-1. `/api/ai/chat` hiện chưa kiểm tra phiên đăng nhập (có `TODO(auth)`): thêm Supabase Auth + middleware trước khi mở công khai, nếu không bất kỳ ai cũng gọi được AI Agent và tốn chi phí API.
-2. `repo.ts` dùng `DEFAULT_STORE_ID`: thay bằng store của người dùng đang đăng nhập (hoặc của chat Telegram đã liên kết).
-3. Thêm rate limit cho webhook và `/api/ai/chat`.
-4. Sinh kiểu TypeScript từ schema: `supabase gen types typescript`.
+1. Thêm rate limit cho webhook và `/api/ai/chat` (đăng nhập đã có; AI chỉ gọi được khi có quyền `ai.use`).
+2. Màn hình quản lý nhân viên (mời, đổi vai trò, vô hiệu hoá).
+3. Sinh kiểu TypeScript từ schema: `supabase gen types typescript`.
+4. Thêm `package-lock.json` (chạy `npm install` rồi commit) để build tái lập được.

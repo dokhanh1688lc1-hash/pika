@@ -9,18 +9,12 @@ const SYSTEM_PROMPT = `Bạn là trợ lý vận hành của phần mềm Beauty
 
 const MAX_STEPS = 6;
 
-export async function askAgent(
-  question: string,
-  history: Anthropic.MessageParam[] = [],
-): Promise<string> {
+export async function askAgent(question: string, storeId?: string): Promise<string> {
   if (!env.anthropicKey) {
     return "AI Agent chưa được cấu hình (thiếu ANTHROPIC_API_KEY).";
   }
   const client = new Anthropic({ apiKey: env.anthropicKey });
-  const messages: Anthropic.MessageParam[] = [
-    ...history,
-    { role: "user", content: question },
-  ];
+  const messages: Anthropic.MessageParam[] = [{ role: "user", content: question }];
 
   for (let step = 0; step < MAX_STEPS; step++) {
     const res = await client.messages.create({
@@ -44,7 +38,7 @@ export async function askAgent(
     for (const block of res.content) {
       if (block.type !== "tool_use") continue;
       try {
-        const out = await runTool(block.name, block.input as Record<string, unknown>);
+        const out = await runTool(block.name, block.input as Record<string, unknown>, storeId);
         results.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(out) });
       } catch (e) {
         results.push({

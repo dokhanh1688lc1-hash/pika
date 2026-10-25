@@ -2,6 +2,7 @@ import { askAgent } from "@/lib/ai/agent";
 import { dashboardStats, lowStockProducts } from "@/lib/data/repo";
 import { env, isSupabaseConfigured } from "@/lib/env";
 import { vnd } from "@/lib/format";
+import { can, type Role } from "@/lib/rbac";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { sendTelegramMessage } from "./api";
 
@@ -9,13 +10,36 @@ export interface TelegramUpdate {
   message?: { chat: { id: number }; text?: string; from?: { id: number } };
 }
 
-/** Chat được phép dùng bot: có trong telegram_links (DB) hoặc TELEGRAM_ALLOWED_CHAT_IDS. */
-async function isAuthorized(chatId: number): Promise<boolean> {
-  if (env.telegramAllowedChats.includes(String(chatId))) return true;
-  if (!isSupabaseConfigured()) return false;
-  const { data } = await getAdminClient()
-    .from("telegram_links").select("id").eq("chat_id", chatId).eq("active", true).maybeSingle();
-  return Boolean(data);
+interface Actor {
+  storeId?: string; // undefined = chế độ demo
+  role: Role;
+}
+
+/**
+ * Xác định người gửi:
+ * - Chat đã liên kết nhân viên (telegram_links) -> cửa hàng + vai trò của nhân viên đó.
+ * - Chat nằm trong TELEGRAM_ALLOWED_CHAT_IDS -> coi như chủ cửa hàng, dùng DEFAULT_STORE_ID.
+ */
+async function resolveActor(chatId: number): Promise<Actor | null> {
+  if (isSupabaseConfigured()) {
+    const db = getAdminClient();
+    const { data: link } = await db
+      .from("telegram_links").select("store_id, staff_id")
+      .eq("chat_id", chatId).eq("active", true).maybeSingle();
+    if (link) {
+      const { data: staff } = await db
+        .from("staff").select("role, active").eq("id", link.staff_id).maybeSingle();
+      if (!staff?.active) return null;
+      return { storeId: link.store_id, role: staff.role as Role };
+    }
+  }
+  if (env.telegramAllowedChats.includes(String(chatId))) {
+    return {
+      storeId: isSupabaseConfigured() ? process.env.DEFAULT_STORE_ID || undefined : undefined,
+      role: "owner",
+    };
+  }
+  return null;
 }
 
 /** /start <mã> — liên kết chat với tài khoản nhân viên bằng mã dùng một lần tạo trong web app. */
@@ -36,6 +60,8 @@ const HELP = `Lệnh khả dụng:
 /help — trợ giúp
 Hoặc nhắn tự nhiên, ví dụ: "khách Lan còn bao nhiêu điểm?"`;
 
+const DENIED = "Bạn không có quyền dùng chức năng này.";
+
 export async function handleUpdate(update: TelegramUpdate) {
   const msg = update.message;
   if (!msg?.text) return;
@@ -44,20 +70,27 @@ export async function handleUpdate(update: TelegramUpdate) {
 
   if (text.startsWith("/start")) {
     const code = text.split(/\s+/)[1];
-    return sendTelegramMessage(chatId, code ? await linkChat(chatId, code) : HELP);
-  }
-
-  if (!(await isAuthorized(chatId))) {
+    if (code) return sendTelegramMessage(chatId, await linkChat(chatId, code));
+    if (await resolveActor(chatId)) return sendTelegramMessage(chatId, HELP);
     return sendTelegramMessage(
       chatId,
-      `Chat này chưa được liên kết (id: ${chatId}). Hãy tạo mã liên kết trong web app rồi gửi /start <mã>.`,
+      `Chat này chưa được liên kết (id: ${chatId}). Tạo mã liên kết trong web app (Cài đặt) rồi gửi /start <mã>.`,
+    );
+  }
+
+  const actor = await resolveActor(chatId);
+  if (!actor) {
+    return sendTelegramMessage(
+      chatId,
+      `Chat này chưa được liên kết (id: ${chatId}). Tạo mã liên kết trong web app (Cài đặt) rồi gửi /start <mã>.`,
     );
   }
 
   if (text === "/help") return sendTelegramMessage(chatId, HELP);
 
   if (text === "/doanhthu") {
-    const s = await dashboardStats();
+    if (!can(actor.role, "reports.view")) return sendTelegramMessage(chatId, DENIED);
+    const s = await dashboardStats(actor.storeId);
     return sendTelegramMessage(
       chatId,
       `Hôm nay: ${vnd(s.todayRevenue)} • ${s.todayOrders} đơn • ${s.newCustomers} khách mới`,
@@ -65,7 +98,10 @@ export async function handleUpdate(update: TelegramUpdate) {
   }
 
   if (text === "/tonkho") {
-    const low = await lowStockProducts();
+    if (!can(actor.role, "inventory.manage") && !can(actor.role, "reports.view")) {
+      return sendTelegramMessage(chatId, DENIED);
+    }
+    const low = await lowStockProducts(actor.storeId);
     return sendTelegramMessage(
       chatId,
       low.length
@@ -74,5 +110,6 @@ export async function handleUpdate(update: TelegramUpdate) {
     );
   }
 
-  return sendTelegramMessage(chatId, await askAgent(text));
+  if (!can(actor.role, "ai.use")) return sendTelegramMessage(chatId, DENIED);
+  return sendTelegramMessage(chatId, await askAgent(text, actor.storeId));
 }

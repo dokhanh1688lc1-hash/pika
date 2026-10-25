@@ -43,18 +43,22 @@ export const agentTools: Anthropic.Tool[] = [
   },
 ];
 
-export async function runTool(name: string, input: Record<string, unknown>): Promise<unknown> {
+export async function runTool(
+  name: string,
+  input: Record<string, unknown>,
+  storeId?: string,
+): Promise<unknown> {
   switch (name) {
     case "get_dashboard_stats":
-      return dashboardStats();
+      return dashboardStats(storeId);
     case "search_products":
-      return searchProducts(String(input.query ?? ""));
+      return searchProducts(String(input.query ?? ""), storeId);
     case "get_low_stock":
-      return lowStockProducts();
+      return lowStockProducts(storeId);
     case "find_customer":
-      return findCustomer(String(input.query ?? ""));
+      return findCustomer(String(input.query ?? ""), storeId);
     case "get_today_appointments":
-      return listTodayAppointments();
+      return listTodayAppointments(storeId);
     default:
       return { error: `Công cụ không tồn tại: ${name}` };
   }
