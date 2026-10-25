@@ -1,9 +1,24 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "regions": ["sin1"],
+  "regions": [
+    "sin1"
+  ],
   "functions": {
-    "src/app/api/telegram/webhook/route.ts": { "maxDuration": 60 },
-    "src/app/api/ai/chat/route.ts": { "maxDuration": 60 }
-  }
+    "src/app/api/telegram/webhook/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/ai/chat/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/cron/expiry/route.ts": {
+      "maxDuration": 60
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/expiry",
+      "schedule": "0 1 * * *"
+    }
+  ]
 }

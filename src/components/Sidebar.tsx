@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  BarChart3, Bot, CalendarClock, LayoutDashboard, Receipt, Package, Settings, ShoppingCart, Sparkles, UserRound, Users, Warehouse,
+  BarChart3, Bot, CalendarClock, Hourglass, LayoutDashboard, Receipt, Package, Settings, ShoppingCart, Sparkles, UserRound, Users, Warehouse,
 } from "lucide-react";
 
 const NAV = [
@@ -12,6 +12,7 @@ const NAV = [
   { href: "/orders", label: "Đơn hàng", icon: Receipt },
   { href: "/products", label: "Hàng hoá & dịch vụ", icon: Package },
   { href: "/inventory", label: "Kho", icon: Warehouse },
+  { href: "/expiry", label: "Hạn sử dụng", icon: Hourglass },
   { href: "/customers", label: "Khách hàng", icon: Users },
   { href: "/appointments", label: "Lịch hẹn", icon: CalendarClock },
   { href: "/staff", label: "Nhân viên", icon: UserRound },

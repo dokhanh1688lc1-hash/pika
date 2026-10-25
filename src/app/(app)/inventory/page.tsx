@@ -37,6 +37,10 @@ export default async function InventoryPage({
               <Field label="Số lượng nhập"><input name="qty" inputMode="numeric" required className={inputClass} /></Field>
               <Field label="Giá nhập (đ/đv)"><input name="unitCost" inputMode="numeric" className={inputClass} placeholder="Tuỳ chọn" /></Field>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Hạn sử dụng (nếu có)"><input name="expiry" type="date" className={inputClass} /></Field>
+              <Field label="Số lô"><input name="batchCode" className={inputClass} placeholder="Tuỳ chọn" /></Field>
+            </div>
             <Field label="Ghi chú"><input name="note" className={inputClass} /></Field>
             <SubmitButton>Nhập kho</SubmitButton>
           </form>

@@ -1,6 +1,7 @@
 import { askAgent } from "@/lib/ai/agent";
-import { dashboardStats, lowStockProducts } from "@/lib/data/repo";
+import { dashboardStats, listExpiring, lowStockProducts } from "@/lib/data/repo";
 import { env, isSupabaseConfigured } from "@/lib/env";
+import { formatExpiryMessage } from "@/lib/expiry";
 import { vnd } from "@/lib/format";
 import { can, type Role } from "@/lib/rbac";
 import { getAdminClient } from "@/lib/supabase/admin";
@@ -57,6 +58,7 @@ async function linkChat(chatId: number, code: string): Promise<string> {
 const HELP = `Lệnh khả dụng:
 /doanhthu — doanh thu hôm nay
 /tonkho — sản phẩm sắp hết hàng
+/hethan — lô hàng hết hạn / sắp hết hạn
 /help — trợ giúp
 Hoặc nhắn tự nhiên, ví dụ: "khách Lan còn bao nhiêu điểm?"`;
 
@@ -108,6 +110,14 @@ export async function handleUpdate(update: TelegramUpdate) {
         ? low.map((p) => `• ${p.name}: còn ${p.stock} (tối thiểu ${p.minStock})`).join("\n")
         : "Không có sản phẩm nào sắp hết hàng.",
     );
+  }
+
+  if (text === "/hethan") {
+    if (!can(actor.role, "inventory.manage") && !can(actor.role, "reports.view")) {
+      return sendTelegramMessage(chatId, DENIED);
+    }
+    const rows = await listExpiring(env.expiryAlertDays, actor.storeId);
+    return sendTelegramMessage(chatId, formatExpiryMessage(rows, env.expiryAlertDays));
   }
 
   if (!can(actor.role, "ai.use")) return sendTelegramMessage(chatId, DENIED);

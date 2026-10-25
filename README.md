@@ -36,7 +36,7 @@ Hướng dẫn từng bước (có hình thức cho người mới): [docs/SUPAB
 1. Tạo bot với @BotFather, lấy token → `TELEGRAM_BOT_TOKEN`.
 2. Đặt `TELEGRAM_WEBHOOK_SECRET` là chuỗi ngẫu nhiên dài.
 3. Sau khi deploy: `APP_URL=https://<app>.vercel.app npm run telegram:webhook`.
-4. Lệnh: `/doanhthu`, `/tonkho`, `/help`, hoặc nhắn tự nhiên để hỏi AI Agent.
+4. Lệnh: `/doanhthu`, `/tonkho`, `/hethan`, `/help`, hoặc nhắn tự nhiên để hỏi AI Agent.
 
 Có database: vào Cài đặt → Tạo mã liên kết → nhắn bot `/start <mã>`; bot dùng đúng cửa hàng và quyền của nhân viên. Chưa có database: thêm chat id vào `TELEGRAM_ALLOWED_CHAT_IDS`.
 
@@ -56,6 +56,7 @@ Hoặc import repo GitHub vào Vercel (Framework: Next.js) và khai báo biến 
 - **Giai đoạn 1 (xong):** khung dự án, schema, RBAC, các màn hình đọc dữ liệu, webhook Telegram, AI Agent chỉ đọc.
 - **Giai đoạn 1.5 (xong):** đăng nhập Supabase, tạo cửa hàng, dữ liệu theo từng cửa hàng, liên kết Telegram theo nhân viên.
 - **Giai đoạn 2a (xong):** form thêm sản phẩm/khách hàng/nhân viên, nhập kho và kiểm kho, POS thật (giỏ hàng, thanh toán, trừ kho, tích điểm, lên hạng, sổ quỹ), danh sách đơn hàng.
+- **Quản lý hạn sử dụng (xong):** nhập kho theo lô có hạn, bán theo lô cận date trước (FEFO), chặn bán hàng hết hạn, huỷ lô, cảnh báo trên web, Telegram `/hethan` và tin nhắn tự động 08:00 mỗi ngày, công cụ cho AI Agent.
 - **Giai đoạn 2b:** sửa/xoá dữ liệu, in hoá đơn, thu nợ đơn còn nợ, hoàn/huỷ đơn, chuyển kho, nhà cung cấp và phiếu nhập, cấp tài khoản cho nhân viên.
 - **Giai đoạn 3:** lịch hẹn kéo-thả + nhắc hẹn Telegram, liệu trình, hoa hồng, tích điểm/hạng thành viên.
 - **Giai đoạn 4:** AI Agent có thao tác ghi (có bước xác nhận), báo cáo thông minh, đa chi nhánh, ứng dụng PWA/offline.

@@ -1,11 +1,11 @@
 import { currentStoreId } from "@/lib/auth";
-import { isSupabaseConfigured } from "@/lib/env";
+import { env, isSupabaseConfigured } from "@/lib/env";
 import { getAdminClient } from "@/lib/supabase/admin";
 import {
-  demoAppointments, demoCustomers, demoProducts, demoStaff, demoStats,
+  demoAppointments, demoBatches, demoCustomers, demoProducts, demoStaff, demoStats,
 } from "./demo";
 import type {
-  Appointment, Customer, DashboardStats, OrderRow, Product, StaffMember,
+  Appointment, BatchRow, Customer, DashboardStats, OrderRow, Product, StaffMember,
 } from "./types";
 
 /**
@@ -173,4 +173,22 @@ export async function listOrders(storeId?: string): Promise<OrderRow[]> {
       status: r.status, createdAt: r.created_at,
     };
   }) as OrderRow[];
+}
+
+/** Các lô còn hàng, đã hết hạn hoặc sẽ hết hạn trong `withinDays` ngày tới (gần hết hạn nhất trước). */
+export async function listExpiring(withinDays: number = env.expiryAlertDays, storeId?: string): Promise<BatchRow[]> {
+  if (!isSupabaseConfigured()) return demoBatches.filter((b) => b.daysLeft <= withinDays);
+  const sid = await resolveStore(storeId);
+  if (!sid) return [];
+  const { data, error } = await getAdminClient()
+    .from("v_batches")
+    .select("id, sku, product, batch_code, quantity, expiry_date, days_left")
+    .eq("store_id", sid)
+    .lte("days_left", withinDays)
+    .order("expiry_date");
+  if (error) throw error;
+  return (data ?? []).map((r) => ({
+    id: r.id, sku: r.sku, product: r.product, batchCode: r.batch_code ?? "",
+    quantity: Number(r.quantity), expiryDate: String(r.expiry_date), daysLeft: Number(r.days_left),
+  }));
 }

@@ -43,6 +43,7 @@ export default async function ProductsPage({
             <Field label="Giá vốn (đ)"><input name="cost" inputMode="numeric" className={inputClass} defaultValue="0" /></Field>
             <Field label="Tồn tối thiểu (hàng hoá)"><input name="minStock" inputMode="numeric" className={inputClass} defaultValue="0" /></Field>
             <Field label="Tồn đầu kỳ (hàng hoá)"><input name="openingStock" inputMode="numeric" className={inputClass} defaultValue="0" /></Field>
+            <Field label="Hạn sử dụng của tồn đầu"><input name="openingExpiry" type="date" className={inputClass} /></Field>
             <Field label="Số buổi (liệu trình)"><input name="sessions" inputMode="numeric" className={inputClass} defaultValue="0" /></Field>
             <div className="sm:col-span-2 lg:col-span-3"><SubmitButton>Lưu sản phẩm</SubmitButton></div>
           </form>

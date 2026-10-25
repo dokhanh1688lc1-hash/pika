@@ -13,6 +13,9 @@ async function run(form: FormData, mode: "in" | "set") {
   const qty = toInt(form.get("qty"), -1);
   const unitCost = toInt(form.get("unitCost"), 0);
   const note = toText(form.get("note"));
+  const expiry = toText(form.get("expiry"));
+  const batchCode = toText(form.get("batchCode"));
+  if (expiry && !/^\d{4}-\d{2}-\d{2}$/.test(expiry)) return redirectMsg(BACK, "error", "Hạn sử dụng không hợp lệ.");
   if (!productId) return redirectMsg(BACK, "error", "Chọn sản phẩm.");
   if (qty < 0 || (mode === "in" && qty === 0)) return redirectMsg(BACK, "error", "Số lượng không hợp lệ.");
 
@@ -23,6 +26,7 @@ async function run(form: FormData, mode: "in" | "set") {
     p_store: m.storeId, p_branch: branch, p_product: productId, p_qty: qty, p_mode: mode,
     p_unit_cost: mode === "in" && unitCost > 0 ? unitCost : null,
     p_note: note || (mode === "in" ? "Nhập kho" : "Kiểm kho"), p_staff: m.staffId,
+    p_expiry: expiry || null, p_batch_code: batchCode || null,
   });
   if (error) return redirectMsg(BACK, "error", error.message);
   revalidatePath("/inventory");

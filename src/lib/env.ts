@@ -11,6 +11,8 @@ export const env = {
     .filter(Boolean),
   anthropicKey: process.env.ANTHROPIC_API_KEY ?? "",
   aiModel: process.env.AI_MODEL ?? "claude-sonnet-5-5",
+  cronSecret: process.env.CRON_SECRET ?? "",
+  expiryAlertDays: Math.max(1, Number(process.env.EXPIRY_ALERT_DAYS) || 30),
 };
 
 export const isSupabaseConfigured = () =>

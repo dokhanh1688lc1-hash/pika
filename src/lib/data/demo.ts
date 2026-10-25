@@ -1,4 +1,4 @@
-import type { Appointment, Customer, DashboardStats, Product, StaffMember } from "./types";
+import type { Appointment, BatchRow, Customer, DashboardStats, Product, StaffMember } from "./types";
 
 export const demoProducts: Product[] = [
   { id: "p1", sku: "SP001", name: "Serum Vitamin C 30ml", kind: "goods", category: "Chăm sóc da", price: 450000, cost: 220000, stock: 24, minStock: 10 },
@@ -46,3 +46,9 @@ export const demoStats: DashboardStats = {
     { label: "CN", revenue: 6850000 },
   ],
 };
+
+export const demoBatches: BatchRow[] = [
+  { id: "b1", sku: "SP003", product: "Mặt nạ cấp ẩm (hộp 10)", batchCode: "L2409", quantity: 6, expiryDate: "2026-10-20", daysLeft: -6 },
+  { id: "b2", sku: "SP002", product: "Kem chống nắng SPF50", batchCode: "L2501", quantity: 4, expiryDate: "2026-10-31", daysLeft: 5 },
+  { id: "b3", sku: "SP001", product: "Serum Vitamin C 30ml", batchCode: "L2503", quantity: 12, expiryDate: "2026-11-18", daysLeft: 23 },
+];

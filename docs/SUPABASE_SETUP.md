@@ -46,6 +46,14 @@ Kiểm tra: mở `https://<app>.vercel.app/api/health`, thấy `"database":"conf
 
 Nhân viên khác: họ tạo tài khoản rồi bạn thêm họ vào cửa hàng (màn hình quản lý nhân viên sẽ có ở giai đoạn 2; hiện tại thêm bằng SQL, bảng `staff`, cột `user_id` là id trong Authentication → Users).
 
+## Cảnh báo hạn sử dụng
+1. Chạy lại `supabase/setup.sql` (bản mới thêm bảng lô hàng và các hàm xử lý hạn dùng).
+2. Khi **nhập kho** hoặc nhập **tồn đầu** cho sản phẩm, điền ô *Hạn sử dụng* (và *Số lô* nếu có). Hàng không điền hạn thì không bị theo dõi.
+3. Xem tại mục **Hạn sử dụng** (menu trái), ô cảnh báo trên Tổng quan, hoặc nhắn bot `/hethan`.
+4. Tin nhắn tự động mỗi ngày 08:00 (giờ Việt Nam): thêm biến `CRON_SECRET` trên Vercel (một chuỗi ngẫu nhiên dài, chỉ chữ và số) rồi Redeploy. Chỉ chủ cửa hàng, quản lý và thủ kho đã liên kết Telegram mới nhận tin.
+5. Số ngày báo trước mặc định 30; đổi bằng biến `EXPIRY_ALERT_DAYS`.
+6. Hàng đã hết hạn **không bán được** ở POS. Vào mục Hạn sử dụng bấm **Huỷ lô** để trừ khỏi tồn kho.
+
 ## Cập nhật khi có phiên bản mới (quan trọng)
 Mỗi khi `supabase/setup.sql` thay đổi (ví dụ giai đoạn 2 thêm hàm bán hàng và nhập kho), hãy **dán lại toàn bộ file và Run** trong SQL Editor. File chạy lại an toàn, không xoá dữ liệu.
 Nếu bỏ qua bước này, POS và nhập kho sẽ báo lỗi kiểu `Could not find the function public.create_pos_order`.

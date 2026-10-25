@@ -20,6 +20,7 @@ export async function createProduct(form: FormData) {
   const minStock = toInt(form.get("minStock"));
   const sessions = toInt(form.get("sessions"), 0);
   const openingStock = toInt(form.get("openingStock"));
+  const openingExpiry = toText(form.get("openingExpiry"));
 
   if (!name || !sku) return redirectMsg(BACK, "error", "Nhập tên và mã sản phẩm.");
   if (!["goods", "service", "package"].includes(kind)) return redirectMsg(BACK, "error", "Loại không hợp lệ.");
@@ -60,6 +61,7 @@ export async function createProduct(form: FormData) {
       await db.rpc("adjust_stock", {
         p_store: m.storeId, p_branch: branch, p_product: product.id, p_qty: openingStock,
         p_mode: "in", p_unit_cost: cost || null, p_note: "Tồn đầu kỳ", p_staff: m.staffId,
+        p_expiry: /^\d{4}-\d{2}-\d{2}$/.test(openingExpiry) ? openingExpiry : null,
       });
     }
   }

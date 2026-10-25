@@ -369,16 +369,76 @@ create policy staff_write on staff for all to authenticated
 -- Chỉ server (service_role) được gọi; người dùng đăng nhập không gọi trực tiếp.
 -- =====================================================================
 
+-- ---------------------------------------------------------------------
+-- Lô hàng có hạn sử dụng. Hàng không có hạn thì không cần tạo lô.
+-- Tổng tồn vẫn nằm ở inventory_levels; lô chỉ theo dõi phần có hạn.
+-- ---------------------------------------------------------------------
+create table if not exists product_batches (
+  id uuid primary key default gen_random_uuid(),
+  store_id uuid not null references stores(id) on delete cascade,
+  branch_id uuid not null references branches(id) on delete cascade,
+  product_id uuid not null references products(id) on delete cascade,
+  batch_code text,
+  quantity integer not null check (quantity >= 0),
+  expiry_date date not null,
+  received_at timestamptz not null default now()
+);
+create index if not exists idx_batches_store_expiry on product_batches (store_id, expiry_date) where quantity > 0;
+create index if not exists idx_batches_product on product_batches (product_id, branch_id);
+
+alter table product_batches enable row level security;
+drop policy if exists tenant_isolation on product_batches;
+create policy tenant_isolation on product_batches for all to authenticated
+  using (store_id = current_store_id()) with check (store_id = current_store_id());
+
+create or replace view v_batches with (security_invoker = true) as
+select b.store_id, b.id, b.product_id, p.sku, p.name as product, b.batch_code,
+       b.quantity, b.expiry_date,
+       (b.expiry_date - (now() at time zone 'Asia/Ho_Chi_Minh')::date) as days_left
+from product_batches b
+join products p on p.id = b.product_id
+where b.quantity > 0;
+
+-- Trừ hàng theo lô, lô cận date bán trước (FEFO). Mặc định bỏ qua lô đã hết hạn.
+-- Trả về số lượng đã trừ được từ các lô (phần còn lại là hàng không theo dõi lô).
+create or replace function consume_batches(
+  p_store uuid, p_branch uuid, p_product uuid, p_qty integer,
+  p_include_expired boolean default false
+) returns integer language plpgsql as $$
+declare
+  v_left integer := p_qty;
+  v_take integer;
+  v_b record;
+  v_today date := (now() at time zone 'Asia/Ho_Chi_Minh')::date;
+begin
+  for v_b in
+    select id, quantity from product_batches
+    where store_id = p_store and branch_id = p_branch and product_id = p_product
+      and quantity > 0 and (p_include_expired or expiry_date >= v_today)
+    order by expiry_date, received_at
+    for update
+  loop
+    exit when v_left <= 0;
+    v_take := least(v_b.quantity, v_left);
+    update product_batches set quantity = quantity - v_take where id = v_b.id;
+    v_left := v_left - v_take;
+  end loop;
+  return p_qty - v_left;
+end $$;
+
 -- Nhập kho / kiểm kho. p_mode: 'in' = cộng thêm, 'set' = đặt đúng số đã đếm.
+-- Có p_expiry thì phần hàng tăng thêm được ghi thành một lô có hạn sử dụng.
+drop function if exists adjust_stock(uuid, uuid, uuid, integer, text, numeric, text, uuid);
 create or replace function adjust_stock(
   p_store uuid, p_branch uuid, p_product uuid, p_qty integer,
   p_mode text, p_unit_cost numeric default null, p_note text default null,
-  p_staff uuid default null
+  p_staff uuid default null, p_expiry date default null, p_batch_code text default null
 ) returns integer language plpgsql as $$
 declare
   v_cur integer;
   v_delta integer;
   v_type stock_move_type;
+  v_today date := (now() at time zone 'Asia/Ho_Chi_Minh')::date;
 begin
   perform pg_advisory_xact_lock(hashtext(p_store::text));
   if not exists (select 1 from products where id = p_product and store_id = p_store and kind = 'goods') then
@@ -388,6 +448,9 @@ begin
     raise exception 'Chi nhánh không hợp lệ';
   end if;
   if p_qty is null or p_qty < 0 then raise exception 'Số lượng không hợp lệ'; end if;
+  if p_expiry is not null and p_expiry < v_today then
+    raise exception 'Hạn sử dụng đã qua, không thể nhập kho';
+  end if;
 
   select quantity into v_cur from inventory_levels where product_id = p_product and branch_id = p_branch;
   v_cur := coalesce(v_cur, 0);
@@ -405,6 +468,13 @@ begin
   values (p_product, p_branch, p_store, v_cur + v_delta)
   on conflict (product_id, branch_id) do update set quantity = excluded.quantity;
 
+  if v_delta < 0 then
+    perform consume_batches(p_store, p_branch, p_product, -v_delta, true);
+  elsif v_delta > 0 and p_expiry is not null then
+    insert into product_batches (store_id, branch_id, product_id, batch_code, quantity, expiry_date)
+    values (p_store, p_branch, p_product, nullif(trim(p_batch_code), ''), v_delta, p_expiry);
+  end if;
+
   if v_delta <> 0 then
     insert into stock_movements (store_id, branch_id, product_id, type, quantity, unit_cost, note, created_by)
     values (p_store, p_branch, p_product, v_type, v_delta, p_unit_cost, p_note, p_staff);
@@ -413,6 +483,28 @@ begin
     update products set cost = p_unit_cost where id = p_product;
   end if;
   return v_cur + v_delta;
+end $$;
+
+-- Huỷ phần còn lại của một lô (thường là hàng đã hết hạn): trừ tồn kho và ghi lịch sử.
+create or replace function dispose_batch(
+  p_store uuid, p_batch uuid, p_staff uuid default null, p_note text default null
+) returns integer language plpgsql as $$
+declare
+  v_b product_batches%rowtype;
+  v_qty integer;
+begin
+  perform pg_advisory_xact_lock(hashtext(p_store::text));
+  select * into v_b from product_batches where id = p_batch and store_id = p_store for update;
+  if not found then raise exception 'Không tìm thấy lô hàng'; end if;
+  if v_b.quantity <= 0 then raise exception 'Lô này đã được xử lý'; end if;
+  v_qty := v_b.quantity;
+  update inventory_levels set quantity = greatest(quantity - v_qty, 0)
+    where product_id = v_b.product_id and branch_id = v_b.branch_id;
+  insert into stock_movements (store_id, branch_id, product_id, type, quantity, ref_type, ref_id, note, created_by)
+  values (p_store, v_b.branch_id, v_b.product_id, 'adjust', -v_qty, 'batch', v_b.id,
+          coalesce(p_note, 'Huỷ hàng hết hạn'), p_staff);
+  update product_batches set quantity = 0 where id = v_b.id;
+  return v_qty;
 end $$;
 
 -- Bán hàng POS: tạo đơn + dòng hàng + thanh toán + trừ kho + sổ quỹ + tích điểm/hạng,
@@ -429,6 +521,7 @@ declare
   v_subtotal numeric := 0; v_total numeric; v_paid numeric := 0; v_amt numeric;
   v_order uuid; v_code text; v_seq integer; v_status order_status;
   v_points integer := 0; v_spent numeric; v_tier customer_tier; v_method payment_method;
+  v_expired integer; v_today date := (now() at time zone 'Asia/Ho_Chi_Minh')::date;
 begin
   perform pg_advisory_xact_lock(hashtext(p_store::text));
 
@@ -484,9 +577,16 @@ begin
     values (v_order, v_prod.id, v_staff, v_qty, v_prod.price, v_line_disc);
 
     if v_prod.kind = 'goods' then
+      -- Hàng đã hết hạn không được bán: chỉ tính phần còn hạn
+      select coalesce(sum(quantity), 0) into v_expired from product_batches
+        where store_id = p_store and branch_id = p_branch and product_id = v_prod.id
+          and quantity > 0 and expiry_date < v_today;
       update inventory_levels set quantity = quantity - v_qty
-        where product_id = v_prod.id and branch_id = p_branch and quantity >= v_qty;
-      if not found then raise exception 'Không đủ tồn kho: %', v_prod.name; end if;
+        where product_id = v_prod.id and branch_id = p_branch and quantity - v_expired >= v_qty;
+      if not found then
+        raise exception 'Không đủ hàng còn hạn sử dụng: %', v_prod.name;
+      end if;
+      perform consume_batches(p_store, p_branch, v_prod.id, v_qty, false);
       insert into stock_movements (store_id, branch_id, product_id, type, quantity, ref_type, ref_id, note, created_by)
       values (p_store, p_branch, v_prod.id, 'sale', -v_qty, 'order', v_order, v_code, p_cashier);
     elsif v_prod.kind = 'package' then
@@ -538,12 +638,18 @@ begin
                             'paid', v_paid, 'status', v_status, 'points', v_points);
 end $$;
 
--- Chỉ service_role (server của app) được gọi hai hàm này
-revoke execute on function adjust_stock(uuid, uuid, uuid, integer, text, numeric, text, uuid) from public;
+-- Chỉ service_role (server của app) được gọi các hàm này
+revoke execute on function consume_batches(uuid, uuid, uuid, integer, boolean) from public;
+revoke execute on function dispose_batch(uuid, uuid, uuid, text) from public;
+revoke execute on function adjust_stock(uuid, uuid, uuid, integer, text, numeric, text, uuid, date, text) from public;
 revoke execute on function create_pos_order(uuid, uuid, uuid, uuid, jsonb, jsonb, numeric, text) from public;
 do $$ begin
-  revoke execute on function adjust_stock(uuid, uuid, uuid, integer, text, numeric, text, uuid) from anon, authenticated;
+  revoke execute on function consume_batches(uuid, uuid, uuid, integer, boolean) from anon, authenticated;
+  revoke execute on function dispose_batch(uuid, uuid, uuid, text) from anon, authenticated;
+  revoke execute on function adjust_stock(uuid, uuid, uuid, integer, text, numeric, text, uuid, date, text) from anon, authenticated;
   revoke execute on function create_pos_order(uuid, uuid, uuid, uuid, jsonb, jsonb, numeric, text) from anon, authenticated;
-  grant execute on function adjust_stock(uuid, uuid, uuid, integer, text, numeric, text, uuid) to service_role;
+  grant execute on function consume_batches(uuid, uuid, uuid, integer, boolean) to service_role;
+  grant execute on function dispose_batch(uuid, uuid, uuid, text) to service_role;
+  grant execute on function adjust_stock(uuid, uuid, uuid, integer, text, numeric, text, uuid, date, text) to service_role;
   grant execute on function create_pos_order(uuid, uuid, uuid, uuid, jsonb, jsonb, numeric, text) to service_role;
 exception when undefined_object then null; end $$;

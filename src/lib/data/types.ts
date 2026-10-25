@@ -55,3 +55,13 @@ export interface OrderRow {
   status: "draft" | "paid" | "partial" | "refunded" | "cancelled";
   createdAt: string;
 }
+
+export interface BatchRow {
+  id: string;
+  sku: string;
+  product: string;
+  batchCode: string;
+  quantity: number;
+  expiryDate: string; // YYYY-MM-DD
+  daysLeft: number;   // âm = đã hết hạn
+}
