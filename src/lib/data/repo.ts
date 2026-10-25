@@ -5,8 +5,8 @@ import {
   demoAppointments, demoBatches, demoCustomers, demoProducts, demoStaff, demoStats,
 } from "./demo";
 import type {
-  Appointment, BatchRow, Branch, Customer, CustomerDetail, DashboardStats, OrderDetail, OrderRow, Product, ProductDetail,
-  PurchaseRow, StaffMember, StoreInfo, Supplier, TransferRow,
+  Appointment, AppointmentFull, BatchRow, Branch, CategoryRow, Customer, CustomerDetail, DashboardStats, OrderDetail, OrderRow, Product, ProductDetail,
+  PurchaseRow, ReportSummary, StaffMember, StoreInfo, Supplier, TransferRow,
 } from "./types";
 
 /**
@@ -418,4 +418,87 @@ export async function listStaffAccounts(storeId?: string): Promise<Record<string
     }),
   );
   return out;
+}
+
+/** Báo cáo lãi lỗ + hoa hồng trong khoảng ngày [from, to] (YYYY-MM-DD, giờ Việt Nam). */
+export async function reportSummary(from: string, to: string, storeId?: string): Promise<ReportSummary | null> {
+  if (!isSupabaseConfigured()) return null;
+  const sid = await resolveStore(storeId);
+  if (!sid) return null;
+  const { data, error } = await getAdminClient().rpc("report_summary", { p_store: sid, p_from: from, p_to: to });
+  if (error) throw new Error(error.message);
+  const r = data as Record<string, any>;
+  const n = (v: unknown) => Number(v ?? 0);
+  return {
+    revenue: n(r.revenue), orders: n(r.orders), discount: n(r.discount), cogs: n(r.cogs),
+    refundCount: n(r.refund_count), refundAmount: n(r.refund_amount),
+    purchases: n(r.purchases), newCustomers: n(r.new_customers),
+    days: (r.days ?? []).map((d: Record<string, unknown>) => ({
+      day: String(d.day), orders: n(d.orders), revenue: n(d.revenue), cogs: n(d.cogs),
+    })),
+    products: (r.products ?? []).map((p: Record<string, unknown>) => ({
+      sku: String(p.sku), name: String(p.name), quantity: n(p.quantity), revenue: n(p.revenue), cost: n(p.cost),
+    })),
+    staff: (r.staff ?? []).map((x: Record<string, unknown>) => ({
+      name: String(x.name), role: String(x.role), rate: n(x.rate), revenue: n(x.revenue), commission: n(x.commission),
+    })),
+  };
+}
+
+/** Lịch hẹn của một ngày (YYYY-MM-DD, giờ Việt Nam), sớm nhất trước. */
+export async function listAppointmentsOn(date: string, storeId?: string): Promise<AppointmentFull[]> {
+  if (!isSupabaseConfigured()) return [];
+  const sid = await resolveStore(storeId);
+  if (!sid) return [];
+  const start = new Date(`${date}T00:00:00+07:00`);
+  const end = new Date(start.getTime() + 86_400_000);
+  const { data, error } = await getAdminClient()
+    .from("appointments")
+    .select("id, starts_at, ends_at, status, note, customer_id, product_id, staff_id, customers(name), products(name), staff(name)")
+    .eq("store_id", sid)
+    .gte("starts_at", start.toISOString())
+    .lt("starts_at", end.toISOString())
+    .order("starts_at");
+  if (error) throw error;
+  return (data ?? []).map((r) => ({
+    id: r.id, startsAt: r.starts_at, endsAt: r.ends_at ?? r.starts_at,
+    customerId: r.customer_id, customer: one<{ name: string }>(r.customers as never)?.name ?? "",
+    productId: r.product_id, service: one<{ name: string }>(r.products as never)?.name ?? "",
+    staffId: r.staff_id ?? "", staff: one<{ name: string }>(r.staff as never)?.name ?? "",
+    status: r.status, note: r.note ?? "",
+  })) as AppointmentFull[];
+}
+
+/** Số lịch hẹn còn hiệu lực theo từng ngày trong khoảng, để hiện chấm trên thanh chọn ngày. */
+export async function appointmentCounts(from: string, to: string, storeId?: string): Promise<Record<string, number>> {
+  if (!isSupabaseConfigured()) return {};
+  const sid = await resolveStore(storeId);
+  if (!sid) return {};
+  const { data } = await getAdminClient()
+    .from("appointments").select("starts_at")
+    .eq("store_id", sid).neq("status", "cancelled")
+    .gte("starts_at", new Date(`${from}T00:00:00+07:00`).toISOString())
+    .lt("starts_at", new Date(new Date(`${to}T00:00:00+07:00`).getTime() + 86_400_000).toISOString());
+  const out: Record<string, number> = {};
+  for (const r of data ?? []) {
+    const d = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh" }).format(new Date(r.starts_at as string));
+    out[d] = (out[d] ?? 0) + 1;
+  }
+  return out;
+}
+
+export async function listCategories(storeId?: string): Promise<CategoryRow[]> {
+  if (!isSupabaseConfigured()) return [];
+  const sid = await resolveStore(storeId);
+  if (!sid) return [];
+  const db = getAdminClient();
+  const { data, error } = await db.from("product_categories").select("id, name").eq("store_id", sid).order("name");
+  if (error) throw error;
+  return Promise.all(
+    (data ?? []).map(async (c) => {
+      const { count } = await db.from("products").select("id", { count: "exact", head: true })
+        .eq("store_id", sid).eq("category_id", c.id);
+      return { id: c.id as string, name: c.name as string, products: count ?? 0 };
+    }),
+  );
 }

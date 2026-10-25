@@ -74,6 +74,12 @@ Nhân viên khác: họ tạo tài khoản rồi bạn thêm họ vào cửa hà
 4. **Cấp tài khoản nhân viên**: trang Nhân viên → "Cấp tài khoản" → nhập email + mật khẩu (từ 8 ký tự), gửi cho nhân viên. Họ đăng nhập tại trang đăng nhập và chỉ có quyền theo vai trò. Có thể đổi mật khẩu hoặc thu hồi tài khoản. Xoá nhân viên sẽ xoá luôn tài khoản đăng nhập.
 5. **Khách hàng**: bấm tên khách để xem lịch sử mua, sửa thông tin hoặc xoá (chỉ xoá được khách chưa có đơn / lịch hẹn và không còn liệu trình dở).
 
+## Báo cáo, lịch hẹn, nhóm hàng
+1. **Chạy lại `supabase/setup.sql`** (thêm hàm `report_summary`). Sau khi cập nhật code cần `npm install` vì có thêm thư viện `exceljs` (Vercel tự cài khi build).
+2. **Báo cáo**: chọn Hôm nay / 7 ngày / Tháng này / Tháng trước hoặc khoảng ngày bất kỳ (tối đa 366 ngày). Có doanh thu, giá vốn, lợi nhuận gộp, hoa hồng nhân viên, sản phẩm bán chạy. Nút **Xuất Excel** tải file .xlsx gồm 5 trang (Tổng quan, Theo ngày, Sản phẩm, Hoa hồng, Đơn hàng). Giá vốn tính theo giá vốn hiện tại của sản phẩm.
+3. **Lịch hẹn**: đặt lịch, sửa giờ / dịch vụ / nhân viên, đổi trạng thái (Bắt đầu, Hoàn thành, Huỷ, Đặt lại) và xoá. Một nhân viên không thể có hai lịch chồng giờ (thời lượng lấy theo dịch vụ, mặc định 60 phút).
+4. **Nhóm hàng**: trang Hàng hoá & dịch vụ → "Quản lý nhóm hàng" để đổi tên hoặc xoá nhóm (sản phẩm trong nhóm chuyển sang chưa phân nhóm).
+
 ## Cập nhật khi có phiên bản mới (quan trọng)
 Mỗi khi `supabase/setup.sql` thay đổi (ví dụ giai đoạn 2 thêm hàm bán hàng và nhập kho), hãy **dán lại toàn bộ file và Run** trong SQL Editor. File chạy lại an toàn, không xoá dữ liệu.
 Nếu bỏ qua bước này, POS và nhập kho sẽ báo lỗi kiểu `Could not find the function public.create_pos_order`.

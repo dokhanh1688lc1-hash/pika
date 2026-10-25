@@ -6,7 +6,7 @@ import { getAdminClient } from "@/lib/supabase/admin";
 
 /** Quay về trang `path` kèm thông báo (hiển thị bằng <Notice />). */
 export function redirectMsg(path: string, key: "error" | "ok", msg: string): never {
-  return redirect(`${path}?${key}=${encodeURIComponent(msg)}`);
+  return redirect(`${path}${path.includes("?") ? "&" : "?"}${key}=${encodeURIComponent(msg)}`);
 }
 
 /** Yêu cầu: đã kết nối DB, đã đăng nhập và có quyền. Sai thì quay về `back` kèm thông báo. */

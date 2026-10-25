@@ -962,3 +962,69 @@ exception when undefined_object then null; end $$;
 alter table stores add column if not exists bank_code text;
 alter table stores add column if not exists bank_account text;
 alter table stores add column if not exists bank_holder text;
+
+-- =====================================================================
+-- Báo cáo lãi lỗ / hoa hồng theo kỳ (tính theo ngày giờ Việt Nam)
+-- Doanh thu = tổng đơn đã thanh toán + còn nợ (không tính đơn hoàn / huỷ).
+-- Giá vốn = số lượng bán x giá vốn HIỆN TẠI của sản phẩm.
+-- Hoa hồng = doanh thu các dòng hàng gắn nhân viên (sau giảm giá dòng) x % hoa hồng.
+-- =====================================================================
+create or replace function report_summary(p_store uuid, p_from date, p_to date)
+returns jsonb language plpgsql stable as $$
+declare v_res jsonb;
+begin
+  if p_from is null or p_to is null or p_to < p_from then raise exception 'Khoảng ngày không hợp lệ'; end if;
+  if p_to - p_from > 366 then raise exception 'Chỉ xem được tối đa 366 ngày mỗi lần'; end if;
+
+  with o as (
+    select id, total, discount, (created_at at time zone 'Asia/Ho_Chi_Minh')::date as d
+    from orders
+    where store_id = p_store and status in ('paid', 'partial')
+      and (created_at at time zone 'Asia/Ho_Chi_Minh')::date between p_from and p_to
+  ), l as (
+    select o.d, oi.staff_id, oi.product_id, oi.quantity, oi.discount as line_discount,
+           oi.quantity * oi.unit_price - oi.discount as rev,
+           oi.quantity * pr.cost as cost, pr.sku, pr.name
+    from o join order_items oi on oi.order_id = o.id join products pr on pr.id = oi.product_id
+  ), days as (
+    select g::date as d from generate_series(p_from, p_to, interval '1 day') g
+  )
+  select jsonb_build_object(
+    'revenue',       coalesce((select sum(total) from o), 0),
+    'orders',        (select count(*) from o),
+    'discount',      coalesce((select sum(discount) from o), 0) + coalesce((select sum(line_discount) from l), 0),
+    'cogs',          coalesce((select sum(cost) from l), 0),
+    'refund_count',  (select count(*) from orders where store_id = p_store and status = 'refunded'
+                       and (closed_at at time zone 'Asia/Ho_Chi_Minh')::date between p_from and p_to),
+    'refund_amount', coalesce((select sum(total) from orders where store_id = p_store and status = 'refunded'
+                       and (closed_at at time zone 'Asia/Ho_Chi_Minh')::date between p_from and p_to), 0),
+    'purchases',     coalesce((select sum(total) from purchase_orders where store_id = p_store
+                       and (created_at at time zone 'Asia/Ho_Chi_Minh')::date between p_from and p_to), 0),
+    'new_customers', (select count(*) from customers where store_id = p_store
+                       and (created_at at time zone 'Asia/Ho_Chi_Minh')::date between p_from and p_to),
+    'days', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'day', days.d,
+        'orders', coalesce((select count(*) from o where o.d = days.d), 0),
+        'revenue', coalesce((select sum(total) from o where o.d = days.d), 0),
+        'cogs', coalesce((select sum(cost) from l where l.d = days.d), 0)) order by days.d)
+      from days), '[]'::jsonb),
+    'products', coalesce((
+      select jsonb_agg(x order by (x->>'revenue')::numeric desc) from (
+        select jsonb_build_object('sku', sku, 'name', name, 'quantity', sum(quantity),
+                                  'revenue', sum(rev), 'cost', sum(cost)) as x
+        from l group by product_id, sku, name order by sum(rev) desc limit 100) t), '[]'::jsonb),
+    'staff', coalesce((
+      select jsonb_agg(jsonb_build_object('name', s.name, 'role', s.role::text, 'rate', s.commission_rate,
+               'revenue', a.rev, 'commission', round(a.rev * s.commission_rate)) order by a.rev desc)
+      from (select staff_id, sum(rev) as rev from l where staff_id is not null group by staff_id) a
+      join staff s on s.id = a.staff_id), '[]'::jsonb)
+  ) into v_res;
+  return v_res;
+end $$;
+
+revoke execute on function report_summary(uuid, date, date) from public;
+do $$ begin
+  revoke execute on function report_summary(uuid, date, date) from anon, authenticated;
+  grant execute on function report_summary(uuid, date, date) to service_role;
+exception when undefined_object then null; end $$;

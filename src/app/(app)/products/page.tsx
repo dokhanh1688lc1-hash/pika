@@ -3,11 +3,12 @@ import Link from "next/link";
 import { ImagePicker } from "@/components/ImagePicker";
 import { Badge, Field, Notice, PageHeader, SubmitButton, Table, inputClass } from "@/components/ui";
 import { getMembership } from "@/lib/auth";
-import { listInactiveProducts, listProducts } from "@/lib/data/repo";
+import { listCategories, listInactiveProducts, listProducts } from "@/lib/data/repo";
 import { isSupabaseConfigured } from "@/lib/env";
 import { vnd } from "@/lib/format";
 import { can } from "@/lib/rbac";
-import { createProduct } from "./actions";
+import { ConfirmForm } from "@/components/ConfirmButton";
+import { createProduct, deleteCategory, renameCategory } from "./actions";
 
 const KIND = { goods: "Hàng hoá", service: "Dịch vụ", package: "Liệu trình" } as const;
 
@@ -17,9 +18,10 @@ export default async function ProductsPage({
   searchParams: Promise<{ error?: string; ok?: string }>;
 }) {
   const { error, ok } = await searchParams;
-  const [products, inactive, member] = await Promise.all([
+  const [products, inactive, categories, member] = await Promise.all([
     listProducts(),
     listInactiveProducts(),
+    listCategories(),
     isSupabaseConfigured() ? getMembership() : Promise.resolve(null),
   ]);
   const canEdit = member ? can(member.role, "products.manage") : false;
@@ -76,6 +78,31 @@ export default async function ProductsPage({
           <tr><td className="td text-slate-500" colSpan={8}>Chưa có sản phẩm nào. Bấm "+ Thêm" ở trên để bắt đầu.</td></tr>
         )}
       </Table>
+
+      {canEdit && categories.length > 0 && (
+        <details className="card mt-6">
+          <summary className="cursor-pointer font-medium text-slate-600">Quản lý nhóm hàng ({categories.length})</summary>
+          <ul className="mt-3 divide-y divide-slate-100 text-sm">
+            {categories.map((c) => (
+              <li key={c.id} className="flex flex-wrap items-center gap-3 py-2">
+                <form action={renameCategory} className="flex flex-1 items-center gap-2">
+                  <input type="hidden" name="id" value={c.id} />
+                  <input name="name" required defaultValue={c.name} className={`${inputClass} max-w-xs`} />
+                  <span className="text-xs text-slate-400">{c.products} sản phẩm</span>
+                  <button className="rounded-lg border border-slate-200 px-3 py-1 text-xs hover:bg-slate-100">Đổi tên</button>
+                </form>
+                <ConfirmForm
+                  action={deleteCategory}
+                  hidden={{ id: c.id }}
+                  message={`Xoá nhóm "${c.name}"? ${c.products} sản phẩm trong nhóm sẽ chuyển sang chưa phân nhóm.`}
+                >
+                  <button className="text-xs text-rose-700 hover:underline">Xoá nhóm</button>
+                </ConfirmForm>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
 
       {inactive.length > 0 && (
         <details className="card mt-6">

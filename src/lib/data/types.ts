@@ -146,3 +146,39 @@ export interface CustomerDetail {
   totalSpent: number;
   orders: { id: string; code: string; total: number; status: OrderStatus; createdAt: string }[];
 }
+
+export interface ReportSummary {
+  revenue: number;
+  orders: number;
+  discount: number;
+  cogs: number;
+  refundCount: number;
+  refundAmount: number;
+  purchases: number;
+  newCustomers: number;
+  days: { day: string; orders: number; revenue: number; cogs: number }[];
+  products: { sku: string; name: string; quantity: number; revenue: number; cost: number }[];
+  staff: { name: string; role: string; rate: number; revenue: number; commission: number }[];
+}
+
+export type AppointmentStatus = "booked" | "in_progress" | "done" | "cancelled";
+
+export interface AppointmentFull {
+  id: string;
+  startsAt: string;
+  endsAt: string;
+  customerId: string;
+  customer: string;
+  productId: string;
+  service: string;
+  staffId: string;
+  staff: string;
+  status: AppointmentStatus;
+  note: string;
+}
+
+export interface CategoryRow {
+  id: string;
+  name: string;
+  products: number;
+}

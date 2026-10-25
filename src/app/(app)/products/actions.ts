@@ -188,3 +188,31 @@ export async function removeProductImage(form: FormData) {
   refresh(id);
   return redirectMsg(back, "ok", "Đã xoá ảnh.");
 }
+
+export async function renameCategory(form: FormData) {
+  const m = await requireMember("products.manage", BACK);
+  const id = toText(form.get("id"));
+  const name = toText(form.get("name"));
+  if (!UUID.test(id)) return redirectMsg(BACK, "error", "Nhóm hàng không hợp lệ.");
+  if (!name) return redirectMsg(BACK, "error", "Nhập tên nhóm hàng.");
+  const { data, error } = await getAdminClient()
+    .from("product_categories").update({ name }).eq("id", id).eq("store_id", m.storeId).select("id");
+  if (error) {
+    return redirectMsg(BACK, "error", error.code === "23505" ? `Đã có nhóm "${name}".` : `Không lưu được: ${error.message}`);
+  }
+  if (!data || data.length === 0) return redirectMsg(BACK, "error", "Không tìm thấy nhóm hàng.");
+  refresh();
+  return redirectMsg(BACK, "ok", `Đã đổi tên nhóm thành "${name}".`);
+}
+
+/** Xoá nhóm: các sản phẩm trong nhóm không bị xoá, chỉ chuyển sang "chưa phân nhóm". */
+export async function deleteCategory(form: FormData) {
+  const m = await requireMember("products.manage", BACK);
+  const id = toText(form.get("id"));
+  if (!UUID.test(id)) return redirectMsg(BACK, "error", "Nhóm hàng không hợp lệ.");
+  const { error } = await getAdminClient()
+    .from("product_categories").delete().eq("id", id).eq("store_id", m.storeId);
+  if (error) return redirectMsg(BACK, "error", `Không xoá được: ${error.message}`);
+  refresh();
+  return redirectMsg(BACK, "ok", "Đã xoá nhóm hàng. Sản phẩm trong nhóm chuyển sang chưa phân nhóm.");
+}
