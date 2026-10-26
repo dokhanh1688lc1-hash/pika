@@ -32,17 +32,20 @@ export async function saveProductImage(
   const path = `${storeId}/${productId}-${Date.now()}.${kind.ext}`;
   const options = { contentType: kind.type, cacheControl: "31536000" };
 
-  let { error } = await db.storage.from(BUCKET).upload(path, buf, options);
-  if (error && /bucket not found/i.test(error.message)) {
-    // Lần đầu: tự tạo kho ảnh công khai rồi tải lại
-    const created = await db.storage.createBucket(BUCKET, {
-      public: true, fileSizeLimit: MAX_IMAGE_BYTES, allowedMimeTypes: MIME,
-    });
+  // Đảm bảo kho ảnh tồn tại và CÔNG KHAI (kho riêng tư sẽ tải lên được nhưng ảnh không hiện)
+  const bucketOpts = { public: true, fileSizeLimit: MAX_IMAGE_BYTES, allowedMimeTypes: MIME };
+  const { data: bucket } = await db.storage.getBucket(BUCKET);
+  if (!bucket) {
+    const created = await db.storage.createBucket(BUCKET, bucketOpts);
     if (created.error && !/already exists/i.test(created.error.message)) {
       return { error: `Không tạo được kho ảnh: ${created.error.message}` };
     }
-    ({ error } = await db.storage.from(BUCKET).upload(path, buf, options));
+  } else if (!bucket.public) {
+    const upd = await db.storage.updateBucket(BUCKET, bucketOpts);
+    if (upd.error) return { error: `Kho ảnh đang ở chế độ riêng tư và không đổi được: ${upd.error.message}` };
   }
+
+  const { error } = await db.storage.from(BUCKET).upload(path, buf, options);
   if (error) return { error: `Không tải được ảnh: ${error.message}` };
 
   const { data } = db.storage.from(BUCKET).getPublicUrl(path);

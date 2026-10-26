@@ -24,11 +24,13 @@ export function ImagePicker({ name = "image", current }: { name?: string; curren
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(current ?? null);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function onChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setBusy(true);
+    setError(null);
     try {
       const out = await compress(file);
       const dt = new DataTransfer();
@@ -36,8 +38,14 @@ export function ImagePicker({ name = "image", current }: { name?: string; curren
       if (inputRef.current) inputRef.current.files = dt.files;
       setPreview(URL.createObjectURL(out));
     } catch {
-      // Không nén được (ví dụ định dạng lạ): giữ file gốc, máy chủ sẽ kiểm tra lại
-      setPreview(URL.createObjectURL(file));
+      // Không nén được (ví dụ ảnh HEIC trên máy không giải mã được): chỉ nhận JPG/PNG/WEBP
+      if (/^image\/(jpeg|png|webp)$/.test(file.type)) {
+        setPreview(URL.createObjectURL(file));
+      } else {
+        if (inputRef.current) inputRef.current.value = "";
+        setPreview(current ?? null);
+        setError("Không đọc được ảnh này. Hãy chọn ảnh JPG, PNG hoặc WEBP (ảnh HEIC: chụp lại ở chế độ 'Tương thích nhất').");
+      }
     } finally {
       setBusy(false);
     }
@@ -56,8 +64,9 @@ export function ImagePicker({ name = "image", current }: { name?: string; curren
       <span className="text-sm text-slate-600">
         {busy ? "Đang xử lý ảnh…" : preview ? "Bấm để đổi ảnh" : "Chọn ảnh sản phẩm (JPG, PNG, WEBP)"}
         <span className="block text-xs text-slate-400">Ảnh tự thu nhỏ trước khi tải lên</span>
+        {error && <span className="mt-1 block text-xs text-rose-600">{error}</span>}
       </span>
-      <input ref={inputRef} type="file" name={name} accept="image/jpeg,image/png,image/webp" onChange={onChange} className="hidden" />
+      <input ref={inputRef} type="file" name={name} accept="image/*" onChange={onChange} className="hidden" />
     </label>
   );
 }
