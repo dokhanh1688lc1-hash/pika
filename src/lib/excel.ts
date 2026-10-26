@@ -76,9 +76,10 @@ export async function readSheet(file: File): Promise<{ rows: SheetRow[] } | { er
   const ExcelJS = await loadExcel();
   const wb = new ExcelJS.Workbook();
   try {
-    await wb.xlsx.load((await file.arrayBuffer()) as unknown as Parameters<typeof wb.xlsx.load>[0]);
-  } catch {
-    return { error: "Không đọc được file. Hãy dùng đúng file .xlsx (có thể tải file mẫu)." };
+    await wb.xlsx.load(Buffer.from(await file.arrayBuffer()) as unknown as Parameters<typeof wb.xlsx.load>[0]);
+  } catch (e) {
+    const why = e instanceof Error ? e.message : String(e);
+    return { error: `Không đọc được file (${why.slice(0, 120)}). Hãy dùng đúng file .xlsx (có thể tải file mẫu).` };
   }
   const ws = wb.worksheets[0];
   if (!ws) return { error: "File không có trang tính nào." };
