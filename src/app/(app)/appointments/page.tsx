@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 import Link from "next/link";
 import { ConfirmForm } from "@/components/ConfirmButton";
 import { Badge, Field, Notice, PageHeader, SubmitButton, Table, inputClass } from "@/components/ui";
@@ -56,16 +57,16 @@ export default async function AppointmentsPage({
       <PageHeader title="Lịch hẹn" subtitle={`Ngày ${dmy(date)}${date === today ? " (hôm nay)" : ""}. Đặt lịch, đổi giờ, đổi trạng thái hoặc xoá.`} />
       <Notice error={sp.error} ok={sp.ok} />
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Link href={`/appointments?date=${addDays(date, -1)}`} className="rounded-xl border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-100">←</Link>
+      <div className="-mx-4 mb-4 flex items-center gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-wrap md:overflow-visible md:px-0">
+        <Link href={`/appointments?date=${addDays(date, -1)}`} className="shrink-0 rounded-xl border border-pink-100 bg-white px-3 py-1.5 text-sm hover:bg-slate-100">←</Link>
         {strip.map((d) => {
           const wd = WEEKDAY[new Date(`${d}T12:00:00Z`).getUTCDay()];
           return (
             <Link
               key={d}
               href={`/appointments?date=${d}`}
-              className={`rounded-xl px-3 py-1.5 text-center text-sm ${
-                d === date ? "bg-brand-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100"
+              className={`shrink-0 rounded-xl px-3 py-1.5 text-center text-sm ${
+                d === date ? "bg-brand-600 text-white" : "bg-white text-slate-600 ring-1 ring-pink-100 hover:bg-slate-100"
               }`}
             >
               <span className="block text-xs opacity-80">{wd}{d === today ? " · nay" : ""}</span>
@@ -74,15 +75,15 @@ export default async function AppointmentsPage({
             </Link>
           );
         })}
-        <Link href={`/appointments?date=${addDays(date, 1)}`} className="rounded-xl border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-100">→</Link>
-        <form action="/appointments" className="ml-auto flex items-center gap-2">
+        <Link href={`/appointments?date=${addDays(date, 1)}`} className="shrink-0 rounded-xl border border-pink-100 bg-white px-3 py-1.5 text-sm hover:bg-slate-100">→</Link>
+        <form action="/appointments" className="ml-auto flex shrink-0 items-center gap-2">
           <input type="date" name="date" defaultValue={date} className={`${inputClass} !w-auto`} />
           <button className="rounded-xl border border-slate-200 px-3 py-2 text-sm hover:bg-slate-100">Xem</button>
         </form>
       </div>
 
       {canEdit && (
-        <details className="card mb-6">
+        <details id="new" className="card mb-6">
           <summary className="cursor-pointer font-medium">+ Đặt lịch hẹn</summary>
           <form action={createAppointment} className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <ApptFields date={date} customers={customers} services={services} staff={staff} />
@@ -91,6 +92,26 @@ export default async function AppointmentsPage({
         </details>
       )}
 
+      {/* Điện thoại: danh sách thẻ */}
+      <ul className="space-y-3 md:hidden">
+        {appts.map((a) => (
+          <li key={a.id} className="card p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-lg font-semibold text-brand-700">{hm(a.startsAt)} – {hm(a.endsAt)}</p>
+                <p className="truncate text-base font-semibold">{a.customer}</p>
+              </div>
+              <Badge tone={STATUS[a.status][1]}>{STATUS[a.status][0]}</Badge>
+            </div>
+            <p className="mt-1 text-sm text-slate-600">{a.service}{a.staff ? ` · ${a.staff}` : ""}</p>
+            {a.note && <p className="mt-0.5 text-sm text-slate-500">{a.note}</p>}
+            {canEdit && <div className="mt-3"><ApptActions a={a} date={date} customers={customers} services={services} staff={staff} /></div>}
+          </li>
+        ))}
+        {appts.length === 0 && <li className="card py-6 text-center text-sm text-slate-500">Không có lịch hẹn nào trong ngày này.</li>}
+      </ul>
+
+      <div className="hidden md:block">
       <Table head={["Giờ", "Khách hàng", "Dịch vụ", "Nhân viên", "Trạng thái", ""]}>
         {appts.map((a) => (
           <tr key={a.id} className="align-top">
@@ -100,9 +121,40 @@ export default async function AppointmentsPage({
             <td className="td">{a.staff || "—"}</td>
             <td className="td"><Badge tone={STATUS[a.status][1]}>{STATUS[a.status][0]}</Badge></td>
             <td className="td">
-              {canEdit && (
+              {canEdit && <ApptActions a={a} date={date} customers={customers} services={services} staff={staff} />}
+            </td>
+          </tr>
+        ))}
+        {appts.length === 0 && (
+          <tr><td className="td text-slate-500" colSpan={6}>Không có lịch hẹn nào trong ngày này.</td></tr>
+        )}
+      </Table>
+      </div>
+      {canEdit && (
+        <Link
+          href="/appointments#new"
+          aria-label="Đặt lịch hẹn"
+          className="fixed bottom-24 right-4 z-20 grid h-14 w-14 place-items-center rounded-full bg-brand-600 text-white shadow-lg active:scale-95 md:hidden print:hidden"
+        >
+          <Plus size={28} />
+        </Link>
+      )}
+    </>
+  );
+}
+
+function ApptActions({
+  a, date, customers, services, staff,
+}: {
+  a: AppointmentFull;
+  date: string;
+  customers: { id: string; name: string; phone: string }[];
+  services: { id: string; name: string }[];
+  staff: { id: string; name: string }[];
+}) {
+  return (
                 <div className="space-y-2">
-                  <div className="flex flex-wrap justify-end gap-2">
+                  <div className="flex flex-wrap gap-2 md:justify-end">
                     {NEXT[a.status].map((n) => (
                       <form key={n.to} action={setAppointmentStatus}>
                         <input type="hidden" name="id" value={a.id} />
@@ -116,8 +168,8 @@ export default async function AppointmentsPage({
                     </ConfirmForm>
                   </div>
                   <details>
-                    <summary className="cursor-pointer text-right text-xs text-brand-700">Sửa lịch</summary>
-                    <form action={updateAppointment} className="mt-2 w-72 space-y-2 rounded-xl border border-slate-200 p-3">
+                    <summary className="cursor-pointer text-sm text-brand-700 md:text-right md:text-xs">Sửa lịch</summary>
+                    <form action={updateAppointment} className="mt-2 w-full max-w-sm space-y-2 rounded-xl border border-slate-200 p-3">
                       <input type="hidden" name="id" value={a.id} />
                       <input type="hidden" name="oldDate" value={date} />
                       <ApptFields appt={a} date={dayOf(a.startsAt)} customers={customers} services={services} staff={staff} compact />
@@ -125,15 +177,6 @@ export default async function AppointmentsPage({
                     </form>
                   </details>
                 </div>
-              )}
-            </td>
-          </tr>
-        ))}
-        {appts.length === 0 && (
-          <tr><td className="td text-slate-500" colSpan={6}>Không có lịch hẹn nào trong ngày này.</td></tr>
-        )}
-      </Table>
-    </>
   );
 }
 

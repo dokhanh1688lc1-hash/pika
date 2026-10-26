@@ -151,7 +151,7 @@ export function PosTerminal({
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       <section className="lg:col-span-2">
-        <div className="sticky top-12 z-20 -mx-4 mb-3 space-y-2 bg-slate-50 px-4 pb-2 pt-2 md:static md:mx-0 md:px-0 md:pt-0 lg:top-0">
+        <div className="sticky top-0 z-20 -mx-4 mb-3 space-y-2 bg-[#fcf6f9] px-4 pb-2 pt-2 md:static md:mx-0 md:px-0 md:pt-0 lg:top-0">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -167,7 +167,7 @@ export function PosTerminal({
                 type="button"
                 onClick={() => setKind(k.key)}
                 className={`shrink-0 rounded-full px-4 py-1.5 text-sm ${
-                  kind === k.key ? "bg-brand-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"
+                  kind === k.key ? "bg-brand-600 text-white" : "bg-white text-slate-600 ring-1 ring-pink-100"
                 }`}
               >
                 {k.label}
@@ -175,7 +175,51 @@ export function PosTerminal({
             ))}
           </div>
         </div>
-        <div className="grid auto-rows-min grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3">
+        {/* Điện thoại: danh sách dòng, dễ chạm */}
+        <ul className="card divide-y divide-pink-100 p-0 md:hidden">
+          {shown.map((p) => {
+            const out = p.kind === "goods" && (p.stock ?? 0) <= 0;
+            return (
+              <li key={p.id}>
+                <button
+                  type="button"
+                  disabled={out}
+                  onClick={() => add(p)}
+                  className="flex w-full items-center gap-3 px-3 py-3 text-left active:bg-brand-50 disabled:opacity-50"
+                >
+                  <span className="relative grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-xl bg-brand-50 text-brand-300">
+                    {p.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={p.imageUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
+                    ) : (
+                      <ShoppingCart size={20} />
+                    )}
+                    {cart[p.id] ? (
+                      <span className="absolute right-0.5 top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-brand-600 px-1 text-[11px] font-semibold text-white">
+                        {cart[p.id]}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="line-clamp-2 text-[15px] font-medium leading-snug">{p.name}</span>
+                    <span className="block truncate text-xs text-slate-500">
+                      {p.sku}{p.description ? ` · ${p.description}` : ""}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-right">
+                    <span className="block text-base font-semibold text-brand-700">{vnd(p.price)}</span>
+                    {p.kind === "goods" && (
+                      <span className={`block text-xs ${out ? "text-rose-600" : "text-slate-500"}`}>{out ? "Hết hàng" : `Tồn: ${p.stock}`}</span>
+                    )}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+          {shown.length === 0 && <li className="px-4 py-6 text-center text-sm text-slate-500">Không có sản phẩm phù hợp.</li>}
+        </ul>
+
+        <div className="hidden auto-rows-min grid-cols-2 gap-2 sm:gap-3 md:grid md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3">
           {shown.map((p) => {
             const out = p.kind === "goods" && (p.stock ?? 0) <= 0;
             return (
@@ -207,7 +251,7 @@ export function PosTerminal({
               </button>
             );
           })}
-          {shown.length === 0 && <p className="text-sm text-slate-500">Không có sản phẩm phù hợp.</p>}
+          {shown.length === 0 && <p className="col-span-full text-sm text-slate-500">Không có sản phẩm phù hợp.</p>}
         </div>
       </section>
 
