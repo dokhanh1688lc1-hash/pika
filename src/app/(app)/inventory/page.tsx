@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { Badge, Field, Notice, PageHeader, SubmitButton, Table, inputClass } from "@/components/ui";
+import { Field, Notice, PageHeader, SubmitButton, inputClass } from "@/components/ui";
 import { getMembership } from "@/lib/auth";
 import { listProducts } from "@/lib/data/repo";
 import { isSupabaseConfigured } from "@/lib/env";
 import { can } from "@/lib/rbac";
-import { stockCount, stockIn } from "./actions";
+import { StockTable } from "@/components/StockTable";
+import { bulkStockEdit, editStockItem, stockCount, stockIn } from "./actions";
 
 export default async function InventoryPage({
   searchParams,
@@ -65,23 +66,12 @@ export default async function InventoryPage({
         </div>
       )}
 
-      <Table head={["Mã", "Sản phẩm", "Tồn", "Tối thiểu", "Trạng thái"]}>
-        {items.map((p) => {
-          const low = (p.stock ?? 0) <= p.minStock;
-          return (
-            <tr key={p.id}>
-              <td className="td text-slate-500">{p.sku}</td>
-              <td className="td font-medium">{p.name}</td>
-              <td className="td">{p.stock}</td>
-              <td className="td">{p.minStock}</td>
-              <td className="td"><Badge tone={low ? "red" : "green"}>{low ? "Sắp hết" : "Đủ hàng"}</Badge></td>
-            </tr>
-          );
-        })}
-        {items.length === 0 && (
-          <tr><td className="td text-slate-500" colSpan={5}>Chưa có hàng hoá. Thêm ở mục Hàng hoá & dịch vụ.</td></tr>
-        )}
-      </Table>
+      <StockTable
+        items={items.map((p) => ({ id: p.id, sku: p.sku, name: p.name, stock: p.stock ?? 0, minStock: p.minStock, cost: p.cost }))}
+        canEdit={canEdit}
+        editAction={editStockItem}
+        bulkAction={bulkStockEdit}
+      />
     </>
   );
 }
