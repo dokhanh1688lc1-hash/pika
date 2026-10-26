@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { env } from "@/lib/env";
 import { isValidSecret, tgCall } from "@/lib/telegram/admin";
+import { COMMAND_MENU } from "@/lib/telegram/commands";
 import { redirectMsg, requireMember } from "@/lib/guard";
 import { toText } from "@/lib/parse";
 import { BANKS } from "@/lib/vietqr";
@@ -74,8 +75,10 @@ export async function registerTelegramWebhook() {
     url, secret_token: env.telegramSecret, allowed_updates: ["message"], drop_pending_updates: true,
   });
   if (!r.ok) return redirectMsg("/settings", "error", `Telegram từ chối: ${r.error}`);
+  // Menu lệnh (nút "/" trong Telegram); lỗi ở bước này không làm hỏng việc đăng ký webhook
+  await tgCall("setMyCommands", { commands: COMMAND_MENU });
   revalidatePath("/settings");
-  return redirectMsg("/settings", "ok", `Đã đăng ký webhook: ${url}`);
+  return redirectMsg("/settings", "ok", `Đã đăng ký webhook và menu lệnh: ${url}`);
 }
 
 export async function removeTelegramWebhook() {

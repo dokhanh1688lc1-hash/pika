@@ -6,6 +6,7 @@ import { vnd } from "@/lib/format";
 import { can, type Role } from "@/lib/rbac";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { sendTelegramMessage, sendTyping } from "./api";
+import { runExtraCommand } from "./commands";
 
 export interface TelegramUpdate {
   message?: { chat: { id: number }; text?: string; from?: { id: number } };
@@ -63,7 +64,15 @@ async function linkChat(chatId: number, code: string): Promise<string> {
 }
 
 const HELP = `Lệnh khả dụng:
+/homnay — tổng quan hôm nay
 /doanhthu — doanh thu hôm nay
+/tuan — báo cáo 7 ngày qua
+/thang — báo cáo tháng này
+/donhang — 5 đơn hàng gần nhất
+/no — công nợ khách hàng
+/lich — lịch hẹn hôm nay
+/sp <tên/mã> — tìm sản phẩm (giá, tồn)
+/khach <tên/SĐT> — tìm khách hàng
 /tonkho — sản phẩm sắp hết hàng
 /hethan — lô hàng hết hạn / sắp hết hạn
 /id — xem mã chat của bạn
@@ -133,6 +142,13 @@ export async function handleUpdate(update: TelegramUpdate) {
     }
     const rows = await listExpiring(env.expiryAlertDays, actor.storeId);
     return sendTelegramMessage(chatId, formatExpiryMessage(rows, env.expiryAlertDays));
+  }
+
+  if (text.startsWith("/")) {
+    const [cmd, ...rest] = text.split(/\s+/);
+    const reply = await runExtraCommand(cmd, rest.join(" ").trim(), actor.role, actor.storeId);
+    if (reply !== null) return sendTelegramMessage(chatId, reply);
+    return sendTelegramMessage(chatId, `Không có lệnh ${cmd}. Gõ /help để xem danh sách lệnh.`);
   }
 
   if (!can(actor.role, "ai.use")) return sendTelegramMessage(chatId, DENIED);
