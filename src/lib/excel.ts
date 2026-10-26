@@ -1,3 +1,5 @@
+import { readFirstSheet } from "@/lib/xlsx-read";
+
 /**
  * Đọc / ghi file Excel (.xlsx) cho nhập xuất hàng hoá và kho. Chỉ chạy ở server.
  * exceljs là CommonJS: tuỳ môi trường, lớp nằm ở `default` hoặc ở chính module.
@@ -73,45 +75,33 @@ export async function readSheet(file: File): Promise<{ rows: SheetRow[] } | { er
   if (file.size > MAX_IMPORT_BYTES) return { error: "File quá lớn (tối đa 5MB)." };
   if (!/\.xlsx$/i.test(file.name)) return { error: "Chỉ nhận file Excel .xlsx. Nếu là .xls hoặc .csv, hãy mở bằng Excel rồi Lưu thành .xlsx." };
 
-  const ExcelJS = await loadExcel();
-  let wb = new ExcelJS.Workbook();
-  type LoadArg = Parameters<typeof wb.xlsx.load>[0];
-  const original = Buffer.from(await file.arrayBuffer());
+  let raw: Awaited<ReturnType<typeof readFirstSheet>>;
   try {
-    await wb.xlsx.load(original as unknown as LoadArg);
-  } catch (first) {
-    // Một số công cụ xuất .xlsx thiếu xl/styles.xml khiến exceljs lỗi: thêm file kiểu tối thiểu rồi thử lại.
-    try {
-      const fixed = await withStyles(original);
-      if (!fixed) throw first;
-      wb = new ExcelJS.Workbook();
-      await wb.xlsx.load(fixed as unknown as LoadArg);
-    } catch (e) {
-      const why = (e instanceof Error ? e.message : String(e)).slice(0, 120);
-      return { error: `Không đọc được file (${why}). Hãy dùng đúng file .xlsx (có thể tải file mẫu).` };
-    }
+    raw = await readFirstSheet(Buffer.from(await file.arrayBuffer()));
+  } catch (e) {
+    const why = (e instanceof Error ? e.message : String(e)).slice(0, 120);
+    return { error: `Không đọc được file (${why}). Hãy dùng đúng file .xlsx (có thể tải file mẫu).` };
   }
-  const ws = wb.worksheets[0];
-  if (!ws) return { error: "File không có trang tính nào." };
+  if (raw.length === 0) return { error: "File không có dữ liệu." };
 
-  const headers: string[] = [];
-  ws.getRow(1).eachCell({ includeEmpty: false }, (cell, col) => {
-    headers[col] = normHeader(cellText(cell.value));
-  });
-  if (!headers.some(Boolean)) return { error: "Dòng 1 phải là tiêu đề cột (Mã, Tên, Giá bán...). Hãy dùng file mẫu." };
+  const headerRow = raw.find((r) => r.cells.size > 0)!;
+  const headers = new Map<number, string>();
+  for (const [col, v] of headerRow.cells) {
+    const h = normHeader(cellText(v));
+    if (h) headers.set(col, h);
+  }
+  if (headers.size === 0) return { error: "Dòng 1 phải là tiêu đề cột (Mã, Tên, Giá bán...). Hãy dùng file mẫu." };
 
   const rows: SheetRow[] = [];
-  for (let r = 2; r <= ws.rowCount; r++) {
-    const row = ws.getRow(r);
+  for (const r of raw) {
+    if (r.n <= headerRow.n) continue;
     const cells: Record<string, unknown> = {};
     let any = false;
-    headers.forEach((h, col) => {
-      if (!h) return;
-      const v = row.getCell(col).value;
-      if (cellText(v) !== "") any = true;
-      cells[h] = v;
-    });
-    if (any) rows.push({ n: r, cells });
+    for (const [col, h] of headers) {
+      const v = r.cells.get(col);
+      if (v !== undefined) { cells[h] = v; any = true; }
+    }
+    if (any) rows.push({ n: r.n, cells });
     if (rows.length > MAX_IMPORT_ROWS) return { error: `Tối đa ${MAX_IMPORT_ROWS} dòng mỗi lần nhập. Hãy chia nhỏ file.` };
   }
   if (rows.length === 0) return { error: "File không có dòng dữ liệu nào (từ dòng 2)." };
@@ -148,24 +138,3 @@ export async function buildXlsx(
 
 export const XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
-const MIN_STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
-
-/** Trả file đã bổ sung styles.xml nếu đang thiếu; null nếu không cần / không sửa được. */
-async function withStyles(buf: Buffer): Promise<Buffer | null> {
-  const JSZip = (await import("jszip")).default;
-  const zip = await JSZip.loadAsync(buf);
-  if (zip.file("xl/styles.xml")) return null;
-  zip.file("xl/styles.xml", MIN_STYLES);
-  const ct = await zip.file("[Content_Types].xml")?.async("string");
-  if (ct && !ct.includes("/xl/styles.xml")) {
-    zip.file("[Content_Types].xml", ct.replace("</Types>",
-      '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'));
-  }
-  const relsPath = "xl/_rels/workbook.xml.rels";
-  const rels = await zip.file(relsPath)?.async("string");
-  if (rels && !rels.includes("relationships/styles")) {
-    zip.file(relsPath, rels.replace("</Relationships>",
-      '<Relationship Id="rIdStyles1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'));
-  }
-  return zip.generateAsync({ type: "nodebuffer" });
-}
