@@ -29,6 +29,11 @@ export default async function ProductsPage({
   return (
     <>
       <PageHeader title="Hàng hoá & dịch vụ" subtitle="Danh mục sản phẩm, dịch vụ và liệu trình. Bấm vào tên để xem, sửa và đổi ảnh." />
+      <div className="mb-4 flex flex-wrap gap-2">
+        <a href="/api/excel/export?type=products" className="btn-secondary">Xuất Excel</a>
+        {canEdit && <Link href="/products/import" className="btn-secondary">Nhập Excel</Link>}
+        {canEdit && <Link href="/products/prices" className="btn-secondary">Sửa giá hàng loạt</Link>}
+      </div>
       <Notice error={error} ok={ok} />
 
       {canEdit && (

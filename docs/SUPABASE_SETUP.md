@@ -112,3 +112,13 @@ Nếu bỏ qua bước này, POS và nhập kho sẽ báo lỗi kiểu `Could no
 | "Không tạo được cửa hàng: ..." | Chưa chạy `setup.sql`, hoặc `SUPABASE_SERVICE_ROLE_KEY` sai |
 | "Could not find the function ..." khi bán hàng hoặc nhập kho | Chưa chạy lại `setup.sql` bản mới |
 | Trang trắng / lỗi 500 sau khi cấu hình | Xem Vercel → Logs, gửi lỗi cho người phát triển |
+
+## Nhập/xuất Excel và sửa giá hàng loạt
+
+Không cần chạy thêm SQL.
+
+- **Hàng hoá → Xuất Excel / Nhập Excel / Sửa giá hàng loạt**; **Kho → Xuất Excel / Nhập Excel**.
+- Mỗi trang nhập có nút *Tải file mẫu*. File phải là `.xlsx`, tối đa 2000 dòng / 5MB. Có lỗi ở bất kỳ dòng nào thì không lưu gì và báo rõ từng dòng.
+- Nhập hàng hoá: mã đã có → cập nhật (ô trống giữ nguyên); mã mới → tạo (có thể điền *Tồn đầu kỳ*).
+- Nhập kho: *Nhập thêm* (cộng tồn, tạo lô nếu có hạn dùng) hoặc *Kiểm kho* (đặt lại tồn).
+- Sửa giá hàng loạt: lọc, chọn sản phẩm, chọn tăng/giảm theo % hoặc số tiền, làm tròn, xem trước rồi áp dụng.

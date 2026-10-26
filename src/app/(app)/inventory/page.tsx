@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Badge, Field, Notice, PageHeader, SubmitButton, Table, inputClass } from "@/components/ui";
 import { getMembership } from "@/lib/auth";
 import { listProducts } from "@/lib/data/repo";
@@ -21,6 +22,10 @@ export default async function InventoryPage({
   return (
     <>
       <PageHeader title="Kho" subtitle="Tồn kho chi nhánh chính: nhập hàng và kiểm kho" />
+      <div className="mb-4 flex flex-wrap gap-2">
+        <a href="/api/excel/export?type=stock" className="btn-secondary">Xuất Excel</a>
+        {canEdit && <Link href="/inventory/import" className="btn-secondary">Nhập Excel</Link>}
+      </div>
       <Notice error={error} ok={ok} />
 
       {canEdit && (
