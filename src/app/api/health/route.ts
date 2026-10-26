@@ -9,7 +9,7 @@ export function GET() {
     services: {
       database: isSupabaseConfigured() ? "configured" : "demo-mode",
       telegram: env.telegramToken && env.telegramSecret ? "configured" : "missing",
-      ai: isAiConfigured() ? (env.anthropicKey ? "configured (anthropic)" : "configured (gemini)") : "missing",
+      ai: isAiConfigured() ? `configured (${env.anthropicKey ? "anthropic" : env.geminiKey ? "gemini" : "openai-compatible"})` : "missing",
     },
   });
 }

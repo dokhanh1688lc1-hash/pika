@@ -15,6 +15,10 @@ export const env = {
   geminiKey: process.env.GEMINI_API_KEY ?? "",
   // Để trống = tự dò model Gemini (flash) còn hoạt động
   geminiModel: process.env.GEMINI_MODEL ?? "",
+  // Phương án miễn phí khác: mọi dịch vụ tương thích OpenAI (Groq, OpenRouter, Mistral...)
+  aiCompatKey: process.env.AI_API_KEY ?? "",
+  aiCompatBaseUrl: (process.env.AI_BASE_URL ?? "https://api.groq.com/openai/v1").replace(/\/$/, ""),
+  aiCompatModel: process.env.AI_COMPAT_MODEL ?? "",
   cronSecret: process.env.CRON_SECRET ?? "",
   expiryAlertDays: Math.max(1, Number(process.env.EXPIRY_ALERT_DAYS) || 30),
 };
@@ -23,4 +27,4 @@ export const isSupabaseConfigured = () =>
   Boolean(env.supabaseUrl && env.supabaseServiceKey);
 
 /** Có ít nhất một nhà cung cấp AI được cấu hình (Anthropic hoặc Gemini). */
-export const isAiConfigured = () => Boolean(env.anthropicKey || env.geminiKey);
+export const isAiConfigured = () => Boolean(env.anthropicKey || env.geminiKey || env.aiCompatKey);

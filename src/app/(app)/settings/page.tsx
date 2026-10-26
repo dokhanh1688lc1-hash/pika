@@ -26,7 +26,7 @@ export default async function SettingsPage({
   const integrations = [
     ["Cơ sở dữ liệu (Supabase)", db],
     ["Telegram Bot", Boolean(env.telegramToken && env.telegramSecret)],
-    [`AI Agent (${env.anthropicKey ? "Anthropic" : env.geminiKey ? "Gemini" : "chưa chọn"})`, isAiConfigured()],
+    [`AI Agent (${env.anthropicKey ? "Anthropic" : env.geminiKey ? "Gemini" : env.aiCompatKey ? "OpenAI-compatible" : "chưa chọn"})`, isAiConfigured()],
   ] as const;
 
   return (

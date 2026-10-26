@@ -93,6 +93,13 @@ Nhân viên khác: họ tạo tài khoản rồi bạn thêm họ vào cửa hà
 3. Không cần `ANTHROPIC_API_KEY`. Có cả hai khoá thì app ưu tiên Anthropic. Model được app tự dò (chọn bản flash ổn định mới nhất đang hoạt động). Tuỳ chọn: đặt `GEMINI_MODEL` để ép dùng một model cụ thể.
 4. Kiểm tra `/api/health` thấy `"ai":"configured (gemini)"`, rồi hỏi thử ở trang Trợ lý AI hoặc qua bot Telegram.
 
+## Trợ lý AI miễn phí khác (Groq, OpenRouter, ...)
+Dùng được mọi dịch vụ tương thích OpenAI có gói miễn phí. Ví dụ Groq: tạo khoá ở https://console.groq.com/keys, rồi trên Vercel thêm:
+- `AI_API_KEY` = khoá vừa tạo
+- `AI_BASE_URL` = `https://api.groq.com/openai/v1` (mặc định; OpenRouter dùng `https://openrouter.ai/api/v1`)
+- `AI_COMPAT_MODEL` = tên một model **hỗ trợ tool calling** (nếu để trống hoặc sai, trợ lý sẽ liệt kê các model đang có để bạn chọn)
+Redeploy rồi kiểm tra `/api/health`. Thứ tự ưu tiên: Anthropic → Gemini → dịch vụ tương thích OpenAI.
+
 ## Cập nhật khi có phiên bản mới (quan trọng)
 Mỗi khi `supabase/setup.sql` thay đổi (ví dụ giai đoạn 2 thêm hàm bán hàng và nhập kho), hãy **dán lại toàn bộ file và Run** trong SQL Editor. File chạy lại an toàn, không xoá dữ liệu.
 Nếu bỏ qua bước này, POS và nhập kho sẽ báo lỗi kiểu `Could not find the function public.create_pos_order`.

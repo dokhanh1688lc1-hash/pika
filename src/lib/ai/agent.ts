@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { env } from "@/lib/env";
 import { askGemini } from "./gemini";
+import { askOpenAiCompat } from "./openai-compat";
 import { SYSTEM_PROMPT } from "./prompt";
 import { agentTools, runTool } from "./tools";
 
@@ -11,7 +12,8 @@ export async function askAgent(question: string, storeId?: string): Promise<stri
   // Ưu tiên Anthropic nếu có khoá; không thì dùng Gemini (có gói miễn phí)
   if (!env.anthropicKey) {
     if (env.geminiKey) return askGemini(question, storeId);
-    return "AI Agent chưa được cấu hình (thiếu ANTHROPIC_API_KEY hoặc GEMINI_API_KEY).";
+    if (env.aiCompatKey) return askOpenAiCompat(question, storeId);
+    return "AI Agent chưa được cấu hình (thiếu ANTHROPIC_API_KEY, GEMINI_API_KEY hoặc AI_API_KEY).";
   }
   const client = new Anthropic({ apiKey: env.anthropicKey });
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: question }];
