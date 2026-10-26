@@ -2,7 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
   // exceljs dùng cho xuất Excel, chạy ở server nên không đóng gói vào bundle
-  serverExternalPackages: ["exceljs"],
+  serverExternalPackages: ["exceljs", "jszip"],
   poweredByHeader: false,
   typescript: { ignoreBuildErrors: false },
   // Cho phép tải ảnh sản phẩm qua server action (ảnh đã nén ở trình duyệt, tối đa 2MB)
