@@ -76,7 +76,7 @@ export async function readSheet(file: File): Promise<{ rows: SheetRow[] } | { er
   const ExcelJS = await loadExcel();
   const wb = new ExcelJS.Workbook();
   try {
-    await wb.xlsx.load(Buffer.from(await file.arrayBuffer()));
+    await wb.xlsx.load((await file.arrayBuffer()) as unknown as Parameters<typeof wb.xlsx.load>[0]);
   } catch {
     return { error: "Không đọc được file. Hãy dùng đúng file .xlsx (có thể tải file mẫu)." };
   }
