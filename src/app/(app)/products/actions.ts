@@ -113,6 +113,9 @@ export async function updateProduct(form: FormData) {
   const cost = toInt(form.get("cost"));
   const minStock = toInt(form.get("minStock"));
   const sessions = toInt(form.get("sessions"), 0);
+  const description = toText(form.get("description")).slice(0, 2000);
+  const duration = toInt(form.get("duration"), 0);
+  if (duration < 0 || duration > 1440) return redirectMsg(back, "error", "Thời lượng không hợp lệ (0–1440 phút).");
   if (!name || !sku) return redirectMsg(back, "error", "Nhập tên và mã sản phẩm.");
   if (price < 0 || cost < 0 || minStock < 0) return redirectMsg(back, "error", "Giá và số lượng không được âm.");
   if (current.kind === "package" && sessions <= 0) return redirectMsg(back, "error", "Liệu trình cần số buổi lớn hơn 0.");
@@ -121,7 +124,8 @@ export async function updateProduct(form: FormData) {
   const { error } = await db
     .from("products")
     .update({
-      name, sku, price, cost, category_id: categoryId,
+      name, sku, price, cost, category_id: categoryId, description: description || null,
+      duration_min: current.kind === "goods" || duration === 0 ? null : duration,
       min_stock: current.kind === "goods" ? minStock : 0,
       package_sessions: current.kind === "package" ? sessions : null,
     })

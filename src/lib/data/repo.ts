@@ -325,6 +325,7 @@ export async function listExpiring(withinDays: number = env.expiryAlertDays, sto
 type ProductRow = {
   id: string; sku: string; name: string; kind: Product["kind"]; price: number | string; cost: number | string;
   min_stock: number; image_url: string | null; active: boolean; package_sessions: number | null;
+  description: string | null; duration_min: number | null;
   product_categories: { name: string } | { name: string }[] | null;
 };
 
@@ -334,17 +335,18 @@ function toDetail(r: ProductRow): ProductDetail {
     id: r.id, sku: r.sku, name: r.name, kind: r.kind, category: c?.name ?? "",
     price: Number(r.price), cost: Number(r.cost), stock: null, minStock: r.min_stock,
     imageUrl: r.image_url, active: r.active, sessions: r.package_sessions,
+    description: r.description ?? "", durationMin: r.duration_min,
   };
 }
 
 const DETAIL_COLUMNS =
-  "id, sku, name, kind, price, cost, min_stock, image_url, active, package_sessions, product_categories(name)";
+  "id, sku, name, kind, price, cost, min_stock, image_url, active, package_sessions, description, duration_min, product_categories(name)";
 
 /** Một sản phẩm (kể cả đã ngừng bán) để xem/sửa. */
 export async function getProduct(id: string, storeId?: string): Promise<ProductDetail | null> {
   if (!isSupabaseConfigured()) {
     const p = demoProducts.find((x) => x.id === id);
-    return p ? { ...p, active: true, sessions: null } : null;
+    return p ? { ...p, active: true, sessions: null, description: "", durationMin: null } : null;
   }
   const sid = await resolveStore(storeId);
   if (!sid || !/^[0-9a-f-]{36}$/i.test(id)) return null;

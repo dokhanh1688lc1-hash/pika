@@ -281,6 +281,7 @@ create index if not exists idx_stock_movements_store_id_product_id_created_at on
 -- ============ Views phục vụ UI / Bot / AI ============
 -- Ảnh sản phẩm (URL công khai trong Supabase Storage, bucket product-images)
 alter table products add column if not exists image_url text;
+alter table products add column if not exists description text;
 
 create or replace view v_products with (security_invoker = true) as
 select p.store_id, p.id, p.sku, p.name, p.kind, coalesce(c.name,'') as category,

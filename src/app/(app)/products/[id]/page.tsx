@@ -88,12 +88,21 @@ export default async function ProductDetailPage({
               {product.kind === "package" && (
                 <Field label="Số buổi"><input name="sessions" inputMode="numeric" defaultValue={String(product.sessions ?? 0)} className={inputClass} /></Field>
               )}
+              {product.kind !== "goods" && (
+                <Field label="Thời lượng (phút)"><input name="duration" inputMode="numeric" defaultValue={String(product.durationMin ?? "")} placeholder="60" className={inputClass} /></Field>
+              )}
+              <div className="sm:col-span-2">
+                <Field label="Mô tả / nội dung">
+                  <textarea name="description" rows={5} maxLength={2000} defaultValue={product.description} className={inputClass} placeholder="Công dụng, thành phần, hướng dẫn sử dụng, quy trình dịch vụ..." />
+                </Field>
+              </div>
               <div className="sm:col-span-2"><SubmitButton>Lưu thay đổi</SubmitButton></div>
             </form>
           ) : (
             <dl className="space-y-2 text-sm">
               <div className="flex justify-between"><dt className="text-slate-500">Nhóm</dt><dd>{product.category || "—"}</dd></div>
               <div className="flex justify-between"><dt className="text-slate-500">Giá bán</dt><dd>{product.price}</dd></div>
+              {product.description && <p className="whitespace-pre-line pt-2 text-slate-700">{product.description}</p>}
             </dl>
           )}
 

@@ -62,7 +62,7 @@ export default async function ProductsPage({
         </details>
       )}
 
-      <Table head={["", "Mã", "Tên", "Loại", "Nhóm", "Giá bán", "Giá vốn", "Tồn"]}>
+      <Table head={["", "Mã", "Tên", "Loại", "Nhóm", "Giá bán", "Giá vốn", "Tồn", ""]}>
         {products.map((p) => (
           <tr key={p.id}>
             <td className="td w-14">
@@ -77,10 +77,11 @@ export default async function ProductsPage({
             <td className="td">{vnd(p.price)}</td>
             <td className="td">{p.cost ? vnd(p.cost) : "—"}</td>
             <td className="td">{p.stock ?? "—"}</td>
+            <td className="td"><Link href={`/products/${p.id}`} className="text-brand-700 hover:underline">{canEdit ? "Sửa" : "Xem"}</Link></td>
           </tr>
         ))}
         {products.length === 0 && (
-          <tr><td className="td text-slate-500" colSpan={8}>Chưa có sản phẩm nào. Bấm "+ Thêm" ở trên để bắt đầu.</td></tr>
+          <tr><td className="td text-slate-500" colSpan={9}>Chưa có sản phẩm nào. Bấm "+ Thêm" ở trên để bắt đầu.</td></tr>
         )}
       </Table>
 

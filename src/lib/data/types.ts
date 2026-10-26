@@ -125,6 +125,8 @@ export interface BatchRow {
 export interface ProductDetail extends Product {
   active: boolean;
   sessions: number | null;
+  description: string;
+  durationMin: number | null;
 }
 
 export interface StoreInfo {
