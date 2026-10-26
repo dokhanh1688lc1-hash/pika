@@ -31,6 +31,7 @@ export default async function OrderDetailPage({
   const [label, tone] = ORDER_STATUS[order.status];
   const when = new Date(order.createdAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
   const closed = order.status === "refunded" || order.status === "cancelled";
+  const qrAmount = order.due > 0 ? order.due : order.total;
 
   return (
     <>
@@ -77,6 +78,7 @@ export default async function OrderDetailPage({
                 <tr key={i} className="align-top">
                   <td className="py-1 pr-2">
                     {it.name}
+                    {it.description && <div className="text-xs text-slate-500">{it.description.length > 140 ? `${it.description.slice(0, 140)}…` : it.description}</div>}
                     <div className="text-slate-500">
                       {vnd(it.unitPrice)}{it.discount > 0 ? ` (giảm ${vnd(it.discount)})` : ""}
                     </div>
@@ -96,11 +98,12 @@ export default async function OrderDetailPage({
             ))}
             {order.due > 0 && <Row k="CÒN NỢ" v={vnd(order.due)} bold />}
           </div>
-          {store.bank && order.due > 0 && (
+          {store.bank && !closed && (
             <div className="mt-3 border-t border-dashed border-slate-400 pt-3 text-center">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={vietQrUrl(store.bank, order.due, order.code)} alt="Mã QR thanh toán" className="mx-auto w-40" />
-              <p className="mt-1">Quét mã để thanh toán {vnd(order.due)}</p>
+              <img src={vietQrUrl(store.bank, qrAmount, order.code)} alt="Mã QR thanh toán" className="mx-auto w-40" />
+              <p className="mt-1 font-bold">{order.due > 0 ? "Còn phải thanh toán" : "Tổng thanh toán"}: {vnd(qrAmount)}</p>
+              <p>Quét mã QR để chuyển khoản</p>
               <p className="text-slate-500">{store.bank.holder} · {store.bank.account}</p>
             </div>
           )}

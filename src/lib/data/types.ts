@@ -11,6 +11,7 @@ export interface Product {
   stock: number | null; // null với dịch vụ / liệu trình
   minStock: number;
   imageUrl?: string | null;
+  description?: string;
 }
 
 export interface Customer {
@@ -70,7 +71,7 @@ export interface OrderDetail extends OrderRow {
   cashier: string;
   branch: string;
   store: { name: string; phone: string; address: string };
-  items: { name: string; sku: string; quantity: number; unitPrice: number; discount: number }[];
+  items: { name: string; sku: string; description: string; quantity: number; unitPrice: number; discount: number }[];
   payments: { method: string; amount: number; at: string }[];
 }
 

@@ -289,7 +289,7 @@ select p.store_id, p.id, p.sku, p.name, p.kind, coalesce(c.name,'') as category,
        case when p.kind = 'goods'
             then coalesce((select sum(i.quantity) from inventory_levels i where i.product_id = p.id), 0)
        end as stock,
-       p.image_url
+       p.image_url, p.description
 from products p left join product_categories c on c.id = p.category_id
 where p.active;
 

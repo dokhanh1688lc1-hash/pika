@@ -14,7 +14,7 @@ export default async function PosPage() {
         demo={!isSupabaseConfigured()}
         bank={store.bank}
         products={products.map((p) => ({
-          id: p.id, sku: p.sku, name: p.name, kind: p.kind, price: p.price, stock: p.stock, imageUrl: p.imageUrl ?? null,
+          id: p.id, sku: p.sku, name: p.name, kind: p.kind, price: p.price, stock: p.stock, imageUrl: p.imageUrl ?? null, description: p.description ?? "",
         }))}
         customers={customers.map((c) => ({ id: c.id, name: `${c.name}${c.phone ? ` · ${c.phone}` : ""}` }))}
         staff={staff.map((s) => ({ id: s.id, name: s.name }))}

@@ -14,6 +14,7 @@ export interface PosProduct {
   price: number;
   stock: number | null;
   imageUrl?: string | null;
+  description?: string;
 }
 export interface PosPerson {
   id: string;
@@ -196,6 +197,7 @@ export function PosTerminal({
                 )}
                 <p className="text-xs text-slate-400">{p.sku}</p>
                 <p className="mt-1 line-clamp-2 text-sm font-medium sm:text-base">{p.name}</p>
+                {p.description && <p className="mt-1 line-clamp-2 text-xs text-slate-500">{p.description}</p>}
                 <p className="mt-1 text-sm text-brand-700 sm:mt-2 sm:text-base">{vnd(p.price)}</p>
                 {p.kind === "goods" && (
                   <p className={`mt-1 text-xs ${out ? "text-rose-600" : "text-slate-500"}`}>
@@ -241,6 +243,7 @@ export function PosTerminal({
               <li key={product.id} className="flex items-center justify-between gap-2 text-sm">
                 <div className="min-w-0">
                   <p className="truncate font-medium">{product.name}</p>
+                  {product.description && <p className="line-clamp-1 text-xs text-slate-500">{product.description}</p>}
                   <p className="text-slate-500">{vnd(product.price)} × {qty}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">

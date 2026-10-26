@@ -26,7 +26,7 @@ export async function listProducts(storeId?: string): Promise<Product[]> {
   if (!sid) return [];
   const { data, error } = await getAdminClient()
     .from("v_products")
-    .select("id, sku, name, kind, category, price, cost, stock, min_stock, image_url")
+    .select("id, sku, name, kind, category, price, cost, stock, min_stock, image_url, description")
     .eq("store_id", sid)
     .order("name");
   if (error) throw error;
@@ -34,7 +34,7 @@ export async function listProducts(storeId?: string): Promise<Product[]> {
     id: r.id, sku: r.sku, name: r.name, kind: r.kind, category: r.category,
     price: Number(r.price), cost: Number(r.cost),
     stock: r.stock === null ? null : Number(r.stock), minStock: r.min_stock,
-    imageUrl: r.image_url ?? null,
+    imageUrl: r.image_url ?? null, description: r.description ?? "",
   })) as Product[];
 }
 
@@ -204,7 +204,7 @@ export async function getOrder(id: string, storeId?: string): Promise<OrderDetai
 
   const [{ data: items }, { data: pays }, { data: store }] = await Promise.all([
     db.from("order_items")
-      .select("quantity, unit_price, discount, products(name, sku)")
+      .select("quantity, unit_price, discount, products(name, sku, description)")
       .eq("order_id", id).order("id"),
     db.from("payments").select("method, amount, created_at").eq("order_id", id).order("created_at"),
     db.from("stores").select("name, phone, address").eq("id", sid).maybeSingle(),
@@ -222,9 +222,9 @@ export async function getOrder(id: string, storeId?: string): Promise<OrderDetai
     cashier: one<{ name: string }>(row.cashier)?.name ?? "", branch: one<{ name: string }>(row.branches)?.name ?? "",
     store: { name: store?.name ?? "", phone: store?.phone ?? "", address: store?.address ?? "" },
     items: (items ?? []).map((it) => {
-      const p = one<{ name: string; sku: string }>(it.products as never);
+      const p = one<{ name: string; sku: string; description: string | null }>(it.products as never);
       return {
-        name: p?.name ?? "", sku: p?.sku ?? "", quantity: it.quantity,
+        name: p?.name ?? "", sku: p?.sku ?? "", description: p?.description ?? "", quantity: it.quantity,
         unitPrice: Number(it.unit_price), discount: Number(it.discount),
       };
     }),
