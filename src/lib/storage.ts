@@ -18,10 +18,28 @@ function sniff(buf: Buffer): { ext: string; type: string } | null {
   return null;
 }
 
+/** Đảm bảo kho ảnh tồn tại và CÔNG KHAI (kho riêng tư sẽ tải lên được nhưng ảnh không hiện). Trả về lỗi nếu có. */
+export async function ensureBucket(): Promise<string | null> {
+  const db = getAdminClient();
+  const bucketOpts = { public: true, fileSizeLimit: MAX_IMAGE_BYTES, allowedMimeTypes: MIME };
+  const { data: bucket } = await db.storage.getBucket(BUCKET);
+  if (!bucket) {
+    const created = await db.storage.createBucket(BUCKET, bucketOpts);
+    if (created.error && !/already exists/i.test(created.error.message)) {
+      return `Không tạo được kho ảnh: ${created.error.message}`;
+    }
+  } else if (!bucket.public) {
+    const upd = await db.storage.updateBucket(BUCKET, bucketOpts);
+    if (upd.error) return `Kho ảnh đang ở chế độ riêng tư và không đổi được: ${upd.error.message}`;
+  }
+  return null;
+}
+
 export async function saveProductImage(
   storeId: string,
   productId: string,
   file: File,
+  opts?: { skipBucketCheck?: boolean },
 ): Promise<{ url: string } | { error: string }> {
   if (file.size > MAX_IMAGE_BYTES) return { error: "Ảnh quá lớn (tối đa 2MB)." };
   const buf = Buffer.from(await file.arrayBuffer());
@@ -32,17 +50,9 @@ export async function saveProductImage(
   const path = `${storeId}/${productId}-${Date.now()}.${kind.ext}`;
   const options = { contentType: kind.type, cacheControl: "31536000" };
 
-  // Đảm bảo kho ảnh tồn tại và CÔNG KHAI (kho riêng tư sẽ tải lên được nhưng ảnh không hiện)
-  const bucketOpts = { public: true, fileSizeLimit: MAX_IMAGE_BYTES, allowedMimeTypes: MIME };
-  const { data: bucket } = await db.storage.getBucket(BUCKET);
-  if (!bucket) {
-    const created = await db.storage.createBucket(BUCKET, bucketOpts);
-    if (created.error && !/already exists/i.test(created.error.message)) {
-      return { error: `Không tạo được kho ảnh: ${created.error.message}` };
-    }
-  } else if (!bucket.public) {
-    const upd = await db.storage.updateBucket(BUCKET, bucketOpts);
-    if (upd.error) return { error: `Kho ảnh đang ở chế độ riêng tư và không đổi được: ${upd.error.message}` };
+  if (!opts?.skipBucketCheck) {
+    const bad = await ensureBucket();
+    if (bad) return { error: bad };
   }
 
   const { error } = await db.storage.from(BUCKET).upload(path, buf, options);

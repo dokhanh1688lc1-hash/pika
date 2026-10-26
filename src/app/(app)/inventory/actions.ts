@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { defaultBranchId, redirectMsg, requireMember } from "@/lib/guard";
 import { toInt, toText } from "@/lib/parse";
 import { applyPriceRule, validateRule, type PriceOp, type PriceRule } from "@/lib/pricing";
+import { deleteProductImage, ensureBucket, saveProductImage } from "@/lib/storage";
 import { getAdminClient } from "@/lib/supabase/admin";
 
 const BACK = "/inventory";
@@ -186,4 +187,103 @@ export async function multiEditStock(form: FormData) {
   revalidatePath("/inventory"); revalidatePath("/products"); revalidatePath("/pos");
   const msg = `Đã lưu ${ok} mặt hàng.${failed ? ` ${failed} mặt hàng lỗi.` : ""}`;
   return redirectMsg(BACK, failed ? "error" : "ok", msg);
+}
+
+const MAX_IMAGE_JOBS = 100;
+
+function pickFiles(form: FormData, key: string): File[] {
+  return form.getAll(key).filter((v): v is File => v instanceof File && v.size > 0);
+}
+
+/** Gán ảnh cho một sản phẩm: tải bản riêng, cập nhật liên kết, rồi xoá ảnh cũ của chính sản phẩm đó. */
+async function setImage(storeId: string, p: { id: string; image_url: string | null }, file: File): Promise<string | null> {
+  const saved = await saveProductImage(storeId, p.id, file, { skipBucketCheck: true });
+  if (!("url" in saved)) return saved.error;
+  const { error } = await getAdminClient().from("products").update({ image_url: saved.url }).eq("id", p.id).eq("store_id", storeId);
+  if (error) { await deleteProductImage(saved.url); return error.message; }
+  await deleteProductImage(p.image_url);
+  return null;
+}
+
+async function runInBatches<T>(items: T[], size: number, fn: (x: T) => Promise<void>) {
+  for (let i = 0; i < items.length; i += size) await Promise.all(items.slice(i, i + size).map(fn));
+}
+
+/** Đặt cùng một ảnh cho các mặt hàng đã chọn hoặc cho cả một nhóm hàng. */
+export async function bulkSetImage(form: FormData) {
+  const m = await requireMember("inventory.manage", BACK);
+  const file = pickFiles(form, "image")[0];
+  if (!file) return redirectMsg(BACK, "error", "Chọn một ảnh trước.");
+  const target = toText(form.get("target"));
+  const db = getAdminClient();
+
+  let q = db.from("products").select("id, image_url").eq("store_id", m.storeId).eq("kind", "goods").eq("active", true);
+  if (target === "category") {
+    const name = toText(form.get("category"));
+    if (!name) return redirectMsg(BACK, "error", "Chọn nhóm hàng.");
+    const { data: cat } = await db.from("product_categories").select("id").eq("store_id", m.storeId).eq("name", name).maybeSingle();
+    if (!cat) return redirectMsg(BACK, "error", "Không tìm thấy nhóm hàng.");
+    q = q.eq("category_id", cat.id);
+  } else {
+    const ids = [...new Set(form.getAll("ids").map(String))].filter((i) => UUID.test(i));
+    if (ids.length === 0) return redirectMsg(BACK, "error", "Chưa chọn mặt hàng nào.");
+    q = q.in("id", ids.slice(0, 500));
+  }
+  const { data: prods, error } = await q.limit(MAX_IMAGE_JOBS + 1);
+  if (error) return redirectMsg(BACK, "error", error.message);
+  if (!prods?.length) return redirectMsg(BACK, "error", "Không có mặt hàng nào để đổi ảnh.");
+  if (prods.length > MAX_IMAGE_JOBS) {
+    return redirectMsg(BACK, "error", `Tối đa ${MAX_IMAGE_JOBS} mặt hàng mỗi lần. Hãy lọc nhỏ hơn rồi làm lại.`);
+  }
+  const bad = await ensureBucket();
+  if (bad) return redirectMsg(BACK, "error", bad);
+
+  let ok = 0, firstErr = "";
+  await runInBatches(prods, 5, async (p) => {
+    const err = await setImage(m.storeId, p, file);
+    if (err) firstErr ||= err; else ok++;
+  });
+  revalidatePath("/inventory"); revalidatePath("/products"); revalidatePath("/pos");
+  const failed = prods.length - ok;
+  return redirectMsg(BACK, failed ? "error" : "ok",
+    `Đã đổi ảnh cho ${ok}/${prods.length} mặt hàng.${failed ? ` Lỗi: ${firstErr}` : ""}`);
+}
+
+/** Tải nhiều ảnh một lúc: tên file (bỏ đuôi) trùng mã sản phẩm thì gán ảnh cho sản phẩm đó. */
+export async function importImagesBySku(form: FormData) {
+  const m = await requireMember("inventory.manage", BACK);
+  const files = pickFiles(form, "images");
+  if (files.length === 0) return redirectMsg(BACK, "error", "Chọn các file ảnh trước.");
+  if (files.length > MAX_IMAGE_JOBS) return redirectMsg(BACK, "error", `Tối đa ${MAX_IMAGE_JOBS} ảnh mỗi lần.`);
+
+  const db = getAdminClient();
+  const skus = files.map((f) => f.name.replace(/\.[^.]+$/, "").trim().toUpperCase());
+  const found = new Map<string, { id: string; image_url: string | null }>();
+  const { data: prods } = await db.from("products").select("id, sku, image_url")
+    .eq("store_id", m.storeId).eq("active", true).in("sku", [...new Set(skus)]);
+  for (const p of prods ?? []) found.set(String(p.sku).toUpperCase(), { id: p.id, image_url: p.image_url });
+
+  const bad = await ensureBucket();
+  if (bad) return redirectMsg(BACK, "error", bad);
+
+  const missing: string[] = [];
+  const jobs: { sku: string; file: File; p: { id: string; image_url: string | null } }[] = [];
+  const used = new Set<string>();
+  files.forEach((file, i) => {
+    const p = found.get(skus[i]);
+    if (!p) missing.push(file.name);
+    else if (used.has(skus[i])) missing.push(`${file.name} (trùng mã)`);
+    else { used.add(skus[i]); jobs.push({ sku: skus[i], file, p }); }
+  });
+
+  let ok = 0, firstErr = "";
+  await runInBatches(jobs, 5, async (j) => {
+    const err = await setImage(m.storeId, j.p, j.file);
+    if (err) firstErr ||= err; else ok++;
+  });
+  revalidatePath("/inventory"); revalidatePath("/products"); revalidatePath("/pos");
+  const parts = [`Đã gán ảnh cho ${ok}/${files.length} file.`];
+  if (missing.length) parts.push(`Không khớp mã: ${missing.slice(0, 8).join(", ")}${missing.length > 8 ? "…" : ""}.`);
+  if (firstErr) parts.push(`Lỗi: ${firstErr}`);
+  return redirectMsg(BACK, missing.length || firstErr ? "error" : "ok", parts.join(" "));
 }

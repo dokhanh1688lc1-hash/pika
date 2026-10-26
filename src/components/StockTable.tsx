@@ -1,6 +1,7 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useMemo, useRef, useState } from "react";
+import { compressImage } from "@/lib/image-client";
 import { Badge } from "@/components/ui";
 import { PRICE_OPS, ROUND_STEPS } from "@/lib/pricing";
 import { vnd } from "@/lib/format";
@@ -10,9 +11,92 @@ export interface StockItem { id: string; sku: string; name: string; stock: numbe
 const field = "rounded-xl border border-slate-200 px-3 py-2 text-sm";
 type Act = (form: FormData) => void | Promise<void>;
 
-export function StockTable({ items, canEdit, editAction, bulkAction, multiAction }: {
-  items: StockItem[]; canEdit: boolean; editAction: Act; bulkAction: Act; multiAction: Act;
+/** Chọn ảnh, thu nhỏ trong trình duyệt rồi đặt lại vào ô file (giữ tên file nếu keepName). */
+function useCompressedInput(keepName: boolean) {
+  const ref = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [count, setCount] = useState(0);
+  async function onChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    setCount(files.length);
+    if (!files.length) return;
+    setBusy(true);
+    try {
+      const dt = new DataTransfer();
+      for (const f of files) {
+        try {
+          const out = await compressImage(f, 900, 0.82, keepName ? `${f.name.replace(/\.[^.]+$/, "")}.webp` : "image.webp");
+          dt.items.add(out);
+        } catch {
+          dt.items.add(f); // không nén được: gửi file gốc, máy chủ sẽ kiểm tra lại
+        }
+      }
+      if (ref.current) ref.current.files = dt.files;
+    } finally {
+      setBusy(false);
+    }
+  }
+  return { ref, busy, count, onChange };
+}
+
+function BulkImagePanel({ pickedIds, cats, onClose, bulkImageAction, skuImagesAction }: {
+  pickedIds: string[]; cats: string[]; onClose: () => void; bulkImageAction: Act; skuImagesAction: Act;
 }) {
+  const [target, setTarget] = useState<"selected" | "category">(pickedIds.length ? "selected" : "category");
+  const one = useCompressedInput(false);
+  const many = useCompressedInput(true);
+  return (
+    <div className="card space-y-5 border-brand-300">
+      <div className="flex items-center justify-between">
+        <p className="font-medium">Đổi ảnh hàng loạt</p>
+        <button type="button" className="text-sm text-slate-500 hover:underline" onClick={onClose}>Đóng</button>
+      </div>
+
+      <form action={bulkImageAction} className="space-y-3">
+        <p className="text-sm font-medium">1. Cùng một ảnh cho nhiều mặt hàng</p>
+        <div className="flex flex-wrap gap-4 text-sm">
+          <label className="flex items-center gap-2">
+            <input type="radio" name="target" value="selected" checked={target === "selected"} onChange={() => setTarget("selected")} />
+            Các mục đã chọn ({pickedIds.length})
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="radio" name="target" value="category" checked={target === "category"} onChange={() => setTarget("category")} />
+            Cả một nhóm hàng
+          </label>
+        </div>
+        {target === "selected" && pickedIds.map((id) => <input key={id} type="hidden" name="ids" value={id} />)}
+        {target === "category" && (
+          <select name="category" required className={field} defaultValue="">
+            <option value="" disabled>— Chọn nhóm hàng —</option>
+            {cats.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        )}
+        <input ref={one.ref} type="file" name="image" accept="image/*" required onChange={one.onChange}
+          className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2" />
+        <button className="btn-primary disabled:opacity-60" disabled={one.busy || (target === "selected" && pickedIds.length === 0)}>
+          {one.busy ? "Đang xử lý ảnh…" : "Đổi ảnh"}
+        </button>
+        <p className="text-xs text-slate-500">Mỗi mặt hàng nhận một bản ảnh riêng; ảnh cũ của mặt hàng đó bị thay. Tối đa 100 mặt hàng mỗi lần.</p>
+      </form>
+
+      <form action={skuImagesAction} className="space-y-3 border-t border-slate-100 pt-4">
+        <p className="text-sm font-medium">2. Nhiều ảnh, mỗi ảnh một mặt hàng</p>
+        <p className="text-xs text-slate-500">Đặt tên file bằng mã sản phẩm, ví dụ <b>SP001.jpg</b>, <b>SP002.png</b>. Hệ thống tự ghép ảnh vào đúng mã. Tối đa 100 ảnh mỗi lần.</p>
+        <input ref={many.ref} type="file" name="images" accept="image/*" multiple required onChange={many.onChange}
+          className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2" />
+        <button className="btn-primary disabled:opacity-60" disabled={many.busy}>
+          {many.busy ? "Đang xử lý ảnh…" : `Tải ${many.count || ""} ảnh lên`}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+export function StockTable({ items, canEdit, editAction, bulkAction, multiAction, bulkImageAction, skuImagesAction }: {
+  items: StockItem[]; canEdit: boolean; editAction: Act; bulkAction: Act; multiAction: Act;
+  bulkImageAction: Act; skuImagesAction: Act;
+}) {
+  const [imgOpen, setImgOpen] = useState(false);
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<string | null>(null);
@@ -59,7 +143,17 @@ export function StockTable({ items, canEdit, editAction, bulkAction, multiAction
           className={`rounded-xl px-3 py-2 text-sm ${lowOnly ? "bg-brand-600 text-white" : "border border-slate-200 bg-white text-slate-600"}`}>
           Sắp hết hàng
         </button>
+        {canEdit && (
+          <button type="button" onClick={() => setImgOpen((v) => !v)} className="btn-secondary">Đổi ảnh hàng loạt</button>
+        )}
       </div>
+
+      {canEdit && imgOpen && (
+        <BulkImagePanel
+          pickedIds={[...picked]} cats={cats} onClose={() => setImgOpen(false)}
+          bulkImageAction={bulkImageAction} skuImagesAction={skuImagesAction}
+        />
+      )}
 
       {canEdit && picked.size > 0 && (
         <form action={bulkAction} className="card space-y-3 border-brand-300">

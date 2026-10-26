@@ -2,23 +2,7 @@
 
 import { ImagePlus } from "lucide-react";
 import { useRef, useState } from "react";
-
-/** Thu nhỏ ảnh về tối đa 900px và nén WEBP để tải nhanh, không vượt giới hạn dung lượng. */
-async function compress(file: File, max = 900, quality = 0.82): Promise<File> {
-  const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
-  const w = Math.max(1, Math.round(bitmap.width * scale));
-  const h = Math.max(1, Math.round(bitmap.height * scale));
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return file;
-  ctx.drawImage(bitmap, 0, 0, w, h);
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", quality));
-  if (!blob) return file;
-  return new File([blob], "image.webp", { type: "image/webp" });
-}
+import { compressImage } from "@/lib/image-client";
 
 export function ImagePicker({ name = "image", current }: { name?: string; current?: string | null }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -32,7 +16,7 @@ export function ImagePicker({ name = "image", current }: { name?: string; curren
     setBusy(true);
     setError(null);
     try {
-      const out = await compress(file);
+      const out = await compressImage(file);
       const dt = new DataTransfer();
       dt.items.add(out);
       if (inputRef.current) inputRef.current.files = dt.files;

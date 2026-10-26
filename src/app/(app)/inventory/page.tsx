@@ -5,7 +5,10 @@ import { listProducts } from "@/lib/data/repo";
 import { isSupabaseConfigured } from "@/lib/env";
 import { can } from "@/lib/rbac";
 import { StockTable } from "@/components/StockTable";
-import { bulkStockEdit, editStockItem, multiEditStock, stockCount, stockIn } from "./actions";
+import { bulkSetImage, bulkStockEdit, editStockItem, importImagesBySku, multiEditStock, stockCount, stockIn } from "./actions";
+
+// Đổi ảnh hàng loạt có thể mất vài chục giây
+export const maxDuration = 60;
 
 export default async function InventoryPage({
   searchParams,
@@ -72,6 +75,8 @@ export default async function InventoryPage({
         editAction={editStockItem}
         bulkAction={bulkStockEdit}
         multiAction={multiEditStock}
+        bulkImageAction={bulkSetImage}
+        skuImagesAction={importImagesBySku}
       />
     </>
   );
