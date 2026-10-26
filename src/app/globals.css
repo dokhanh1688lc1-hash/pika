@@ -5,11 +5,11 @@
 :root { color-scheme: light; }
 
 body {
-  @apply bg-slate-50 text-slate-900 antialiased;
+  @apply bg-[#fcf6f9] text-slate-900 antialiased;
 }
 
 @layer components {
-  .card { @apply rounded-2xl border border-slate-200 bg-white p-5 shadow-sm; }
+  .card { @apply rounded-2xl border border-pink-100 bg-white p-5 shadow-sm; }
   .th { @apply px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-slate-500; }
   .td { @apply px-3 py-3 text-sm; }
   .btn-primary { @apply rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700; }

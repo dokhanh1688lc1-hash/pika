@@ -30,7 +30,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <Sidebar />
       <div className="min-w-0 flex-1">
       <MobileNav />
-      <main className="p-4 pb-24 md:p-8 md:pb-8 print:p-0">
+      <main className="p-4 pb-28 md:p-8 md:pb-8 print:p-0">
         {demo && (
           <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 print:hidden">
             Đang chạy chế độ demo (chưa cấu hình Supabase) — dữ liệu hiển thị là dữ liệu mẫu.
@@ -53,7 +53,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </Link>
         )}
         {member && (
-          <div className="mb-6 flex items-center justify-end gap-3 text-sm print:hidden">
+          <div className="mb-6 hidden items-center justify-end gap-3 text-sm md:flex print:hidden">
             <span className="text-slate-600">
               {member.name} · {ROLE_LABEL[member.role]}
             </span>

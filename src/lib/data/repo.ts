@@ -157,7 +157,11 @@ export async function dashboardStats(storeId?: string): Promise<DashboardStats> 
   };
 }
 
-export async function listOrders(storeId?: string, onlyDebt = false): Promise<OrderRow[]> {
+export async function listOrders(
+  storeId?: string,
+  onlyDebt = false,
+  range?: { from: string; to: string },
+): Promise<OrderRow[]> {
   if (!isSupabaseConfigured()) return [];
   const sid = await resolveStore(storeId);
   if (!sid) return [];
@@ -166,18 +170,50 @@ export async function listOrders(storeId?: string, onlyDebt = false): Promise<Or
     .select("id, code, customer, total, paid, due, status, created_at")
     .eq("store_id", sid);
   if (onlyDebt) q = q.eq("status", "partial");
-  const { data, error } = await q.order("created_at", { ascending: false }).limit(100);
+  // Khoảng ngày tính theo giờ Việt Nam (UTC+7)
+  if (range) q = q.gte("created_at", `${range.from}T00:00:00+07:00`).lt("created_at", `${addIsoDay(range.to, 1)}T00:00:00+07:00`);
+  const { data, error } = await q.order("created_at", { ascending: false }).limit(range ? 500 : 100);
   if (error) throw error;
-  return (data ?? []).map((r) => ({
+  const rows = (data ?? []).map((r) => ({
     id: r.id, code: r.code, customer: r.customer, total: Number(r.total),
     paid: Number(r.paid), due: Number(r.due), status: r.status, createdAt: r.created_at,
   })) as OrderRow[];
+
+  // Tóm tắt mặt hàng + hình thức thanh toán cho từng đơn (truy vấn gộp, không gọi lần lượt)
+  const ids = rows.map((r) => r.id);
+  const items = new Map<string, { name: string; qty: number; n: number }>();
+  const methods = new Map<string, string>();
+  const db = getAdminClient();
+  for (let i = 0; i < ids.length; i += 100) {
+    const part = ids.slice(i, i + 100);
+    const [{ data: its }, { data: pays }] = await Promise.all([
+      db.from("order_items").select("order_id, quantity, products(name)").in("order_id", part).order("id"),
+      db.from("payments").select("order_id, method, amount").in("order_id", part).order("created_at"),
+    ]);
+    for (const it of its ?? []) {
+      const cur = items.get(it.order_id);
+      if (cur) cur.n++;
+      else items.set(it.order_id, { name: one<{ name: string }>(it.products as never)?.name ?? "", qty: it.quantity, n: 1 });
+    }
+    for (const p of pays ?? []) if (Number(p.amount) > 0 && !methods.has(p.order_id)) methods.set(p.order_id, p.method);
+  }
+  for (const r of rows) {
+    const it = items.get(r.id);
+    if (it) { r.firstItem = it.name; r.firstQty = it.qty; r.moreItems = it.n - 1; }
+    r.method = methods.get(r.id);
+  }
+  return rows;
 }
 
 /** Tổng công nợ khách hàng (các đơn còn thiếu tiền). */
 export async function totalReceivable(storeId?: string): Promise<{ count: number; amount: number }> {
   const rows = await listOrders(storeId, true);
   return { count: rows.length, amount: rows.reduce((a, r) => a + r.due, 0) };
+}
+
+function addIsoDay(iso: string, n: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
 }
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;

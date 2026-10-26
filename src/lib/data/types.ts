@@ -58,6 +58,11 @@ export interface OrderRow {
   due: number;
   status: OrderStatus;
   createdAt: string;
+  /** Mặt hàng đầu tiên, số mặt hàng còn lại và hình thức thanh toán chính (chỉ có ở danh sách đơn) */
+  firstItem?: string;
+  firstQty?: number;
+  moreItems?: number;
+  method?: string;
 }
 
 export type OrderStatus = "draft" | "paid" | "partial" | "refunded" | "cancelled";
