@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import type { CookieToSet } from "@/lib/supabase/cookies";
+import { SESSION_ONLY_COOKIE, toSessionCookie, type CookieToSet } from "@/lib/supabase/cookies";
 
 // Các đường dẫn không cần đăng nhập (webhook Telegram và cron tự xác thực bằng secret riêng)
 const PUBLIC_PATHS = ["/login", "/api/health", "/api/telegram", "/api/cron"];
@@ -18,7 +18,9 @@ export async function middleware(req: NextRequest) {
       setAll: (list: CookieToSet[]) => {
         list.forEach(({ name, value }) => req.cookies.set(name, value));
         res = NextResponse.next({ request: req });
-        list.forEach(({ name, value, options }) => res.cookies.set(name, value, options));
+        const sessionOnly = req.cookies.get(SESSION_ONLY_COOKIE)?.value === "1";
+        list.forEach(({ name, value, options }) =>
+          res.cookies.set(name, value, sessionOnly && value ? toSessionCookie(options) : options));
       },
     },
   });
