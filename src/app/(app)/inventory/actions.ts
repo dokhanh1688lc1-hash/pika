@@ -133,3 +133,57 @@ export async function bulkStockEdit(form: FormData) {
   const msg = `Đã cập nhật ${ok} mặt hàng.${failed ? ` ${failed} mặt hàng lỗi.` : ""}`;
   return redirectMsg(BACK, failed ? "error" : "ok", msg);
 }
+
+/** Sửa nhiều mặt hàng cùng lúc, mỗi mặt hàng một giá trị riêng (tồn thực tế, tồn tối thiểu, giá vốn). */
+export async function multiEditStock(form: FormData) {
+  const m = await requireMember("inventory.manage", BACK);
+  const ids = [...new Set(form.getAll("ids").map(String))].filter((i) => UUID.test(i));
+  if (ids.length === 0) return redirectMsg(BACK, "error", "Chưa chọn mặt hàng nào.");
+  if (ids.length > 300) return redirectMsg(BACK, "error", "Tối đa 300 mặt hàng mỗi lần.");
+
+  const num = (key: string): number | null | "bad" => {
+    const raw = toText(form.get(key));
+    if (raw === "") return null;
+    const n = toInt(raw, -1);
+    return n < 0 ? "bad" : n;
+  };
+  const edits: { id: string; qty: number | null; oldQty: number; min: number | null; cost: number | null }[] = [];
+  for (const id of ids) {
+    const qty = num(`qty_${id}`), min = num(`min_${id}`), cost = num(`cost_${id}`);
+    if (qty === "bad" || min === "bad" || cost === "bad") {
+      return redirectMsg(BACK, "error", "Có ô nhập không hợp lệ (phải là số không âm). Chưa lưu gì.");
+    }
+    edits.push({ id, qty, oldQty: toInt(form.get(`old_${id}`), -1), min, cost });
+  }
+
+  const db = getAdminClient();
+  const valid = new Set<string>();
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data } = await db.from("products").select("id").eq("store_id", m.storeId).eq("kind", "goods").in("id", ids.slice(i, i + 200));
+    for (const r of data ?? []) valid.add(r.id);
+  }
+  const branch = await defaultBranchId(m.storeId);
+  let ok = 0, failed = 0;
+  for (const e of edits) {
+    if (!valid.has(e.id)) { failed++; continue; }
+    const patch: Record<string, number> = {};
+    if (e.min !== null) patch.min_stock = e.min;
+    if (e.cost !== null) patch.cost = e.cost;
+    let bad = false;
+    if (Object.keys(patch).length) {
+      const { error } = await db.from("products").update(patch).eq("id", e.id).eq("store_id", m.storeId);
+      if (error) bad = true;
+    }
+    if (!bad && e.qty !== null && e.qty !== e.oldQty && branch) {
+      const { error } = await db.rpc("adjust_stock", {
+        p_store: m.storeId, p_branch: branch, p_product: e.id, p_qty: e.qty, p_mode: "set",
+        p_unit_cost: null, p_note: "Sửa tồn kho (nhiều mặt hàng)", p_staff: m.staffId, p_expiry: null, p_batch_code: null,
+      });
+      if (error) bad = true;
+    }
+    if (bad) failed++; else ok++;
+  }
+  revalidatePath("/inventory"); revalidatePath("/products"); revalidatePath("/pos");
+  const msg = `Đã lưu ${ok} mặt hàng.${failed ? ` ${failed} mặt hàng lỗi.` : ""}`;
+  return redirectMsg(BACK, failed ? "error" : "ok", msg);
+}

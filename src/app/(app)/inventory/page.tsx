@@ -5,7 +5,7 @@ import { listProducts } from "@/lib/data/repo";
 import { isSupabaseConfigured } from "@/lib/env";
 import { can } from "@/lib/rbac";
 import { StockTable } from "@/components/StockTable";
-import { bulkStockEdit, editStockItem, stockCount, stockIn } from "./actions";
+import { bulkStockEdit, editStockItem, multiEditStock, stockCount, stockIn } from "./actions";
 
 export default async function InventoryPage({
   searchParams,
@@ -67,10 +67,11 @@ export default async function InventoryPage({
       )}
 
       <StockTable
-        items={items.map((p) => ({ id: p.id, sku: p.sku, name: p.name, stock: p.stock ?? 0, minStock: p.minStock, cost: p.cost }))}
+        items={items.map((p) => ({ id: p.id, sku: p.sku, name: p.name, stock: p.stock ?? 0, minStock: p.minStock, cost: p.cost, category: p.category }))}
         canEdit={canEdit}
         editAction={editStockItem}
         bulkAction={bulkStockEdit}
+        multiAction={multiEditStock}
       />
     </>
   );

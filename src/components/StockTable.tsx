@@ -5,24 +5,34 @@ import { Badge } from "@/components/ui";
 import { PRICE_OPS, ROUND_STEPS } from "@/lib/pricing";
 import { vnd } from "@/lib/format";
 
-export interface StockItem { id: string; sku: string; name: string; stock: number; minStock: number; cost: number }
+export interface StockItem { id: string; sku: string; name: string; stock: number; minStock: number; cost: number; category: string }
 
 const field = "rounded-xl border border-slate-200 px-3 py-2 text-sm";
 type Act = (form: FormData) => void | Promise<void>;
 
-export function StockTable({ items, canEdit, editAction, bulkAction }: {
-  items: StockItem[]; canEdit: boolean; editAction: Act; bulkAction: Act;
+export function StockTable({ items, canEdit, editAction, bulkAction, multiAction }: {
+  items: StockItem[]; canEdit: boolean; editAction: Act; bulkAction: Act; multiAction: Act;
 }) {
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<string | null>(null);
   const [mode, setMode] = useState("minStock");
   const [op, setOp] = useState("inc_pct");
+  const [cat, setCat] = useState("");
+  const [lowOnly, setLowOnly] = useState(false);
+  const [grid, setGrid] = useState(false);
+  const cats = useMemo(() => [...new Set(items.map((i) => i.category).filter(Boolean))].sort(), [items]);
 
   const shown = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return s ? items.filter((i) => i.name.toLowerCase().includes(s) || i.sku.toLowerCase().includes(s)) : items;
-  }, [items, q]);
+    return items.filter(
+      (i) =>
+        (!cat || i.category === cat) &&
+        (!lowOnly || i.stock <= i.minStock) &&
+        (!s || i.name.toLowerCase().includes(s) || i.sku.toLowerCase().includes(s)),
+    );
+  }, [items, q, cat, lowOnly]);
+  const pickedItems = useMemo(() => items.filter((i) => picked.has(i.id)), [items, picked]);
   const allPicked = shown.length > 0 && shown.every((i) => picked.has(i.id));
   const cols = canEdit ? 7 : 5;
 
@@ -39,7 +49,17 @@ export function StockTable({ items, canEdit, editAction, bulkAction }: {
 
   return (
     <div className="space-y-3">
-      <input className={`${field} w-full sm:max-w-xs`} placeholder="Tìm tên hoặc mã..." value={q} onChange={(e) => setQ(e.target.value)} />
+      <div className="flex flex-wrap gap-2">
+        <input className={`${field} min-w-0 flex-1 basis-48`} placeholder="Tìm tên hoặc mã..." value={q} onChange={(e) => setQ(e.target.value)} />
+        <select className={field} value={cat} onChange={(e) => setCat(e.target.value)}>
+          <option value="">Mọi nhóm</option>
+          {cats.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <button type="button" onClick={() => setLowOnly((v) => !v)}
+          className={`rounded-xl px-3 py-2 text-sm ${lowOnly ? "bg-brand-600 text-white" : "border border-slate-200 bg-white text-slate-600"}`}>
+          Sắp hết hàng
+        </button>
+      </div>
 
       {canEdit && picked.size > 0 && (
         <form action={bulkAction} className="card space-y-3 border-brand-300">
@@ -71,9 +91,41 @@ export function StockTable({ items, canEdit, editAction, bulkAction }: {
               </label>
             )}
             <button className="btn-primary">Áp dụng</button>
+            <button type="button" className="btn-secondary" onClick={() => setGrid(true)}>Sửa từng mặt hàng đã chọn</button>
             <button type="button" className="btn-secondary" onClick={() => setPicked(new Set())}>Bỏ chọn</button>
           </div>
           {mode === "setQty" && <p className="text-xs text-amber-700">Tồn của tất cả mặt hàng đã chọn sẽ được đặt đúng bằng số này (ở chi nhánh chính).</p>}
+        </form>
+      )}
+
+      {canEdit && grid && pickedItems.length > 0 && (
+        <form action={multiAction} className="card space-y-3 border-brand-300">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium">Sửa {pickedItems.length} mặt hàng — mỗi dòng một giá trị</p>
+            <button type="button" className="text-sm text-slate-500 hover:underline" onClick={() => setGrid(false)}>Đóng</button>
+          </div>
+          <div className="max-h-[60vh] overflow-auto rounded-xl border border-slate-200">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-slate-50">
+                <tr><th className="th">Sản phẩm</th><th className="th">Tồn thực tế</th><th className="th">Tối thiểu</th><th className="th">Giá vốn (đ)</th></tr>
+              </thead>
+              <tbody>
+                {pickedItems.map((p) => (
+                  <tr key={p.id} className="border-t border-slate-100">
+                    <td className="px-3 py-2">
+                      <input type="hidden" name="ids" value={p.id} />
+                      <input type="hidden" name={`old_${p.id}`} value={p.stock} />
+                      <span className="text-slate-500">{p.sku}</span> · {p.name}
+                    </td>
+                    <td className="px-2 py-1"><input name={`qty_${p.id}`} inputMode="numeric" defaultValue={p.stock} className={`${field} w-24`} /></td>
+                    <td className="px-2 py-1"><input name={`min_${p.id}`} inputMode="numeric" defaultValue={p.minStock} className={`${field} w-24`} /></td>
+                    <td className="px-2 py-1"><input name={`cost_${p.id}`} inputMode="numeric" defaultValue={p.cost} className={`${field} w-28`} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <button className="btn-primary">Lưu tất cả</button>
         </form>
       )}
 
